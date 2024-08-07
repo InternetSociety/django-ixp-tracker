@@ -1,5 +1,5 @@
 [project]
-name = "ixp-tracker"
+name = "django-ixp-tracker"
 version = "0.1"
 description = "Library to retrieve and manipulate data about IXPs"
 readme = "README.md"
@@ -18,10 +18,10 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project.urls]
-Homepage = "https://github.com/InternetSociety/ixp-tracker"
-Changelog = "https://github.com/InternetSociety/ixp-tracker/releases"
-Issues = "https://github.com/InternetSociety/ixp-tracker/issues"
-CI = "https://github.com/InternetSociety/ixp-tracker/actions"
+Homepage = "https://github.com/InternetSociety/django-ixp-tracker"
+Changelog = "https://github.com/InternetSociety/django-ixp-tracker/releases"
+Issues = "https://github.com/InternetSociety/django-ixp-tracker/issues"
+CI = "https://github.com/InternetSociety/django-ixp-tracker/actions"
 
 
 [project.optional-dependencies]
