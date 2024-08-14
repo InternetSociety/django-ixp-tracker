@@ -29,6 +29,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='asn',
-            constraint=models.UniqueConstraint(fields=('number',), name='unique_as_number'),
+            constraint=models.UniqueConstraint(fields=('number',), name='ixp_tracker_unique_as_number'),
         ),
     ]

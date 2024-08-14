@@ -33,6 +33,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='ixp',
-            constraint=models.UniqueConstraint(fields=('peeringdb_id',), name='unique_ixp_peeringdb_id'),
+            constraint=models.UniqueConstraint(fields=('peeringdb_id',), name='ixp_tracker_unique_ixp_peeringdb_id'),
         ),
     ]

@@ -1,10 +1,7 @@
-import json
 from datetime import datetime
 
 import pytest
-import responses
 
-from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
 from ixp_tracker import importers
 from ixp_tracker.models import IXP
 
@@ -22,48 +19,18 @@ dummy_ixp_data = {
 }
 
 
-def test_with_no_import_date_queries_peering_db_directly():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/ix",
-            body=json.dumps({"data": []}),
-        )
-        result = importers.import_ixps()
-        assert result
+def test_with_no_data_does_nothing():
+    importers.process_ixp_data([])
 
-
-def test_returns_false_if_query_fails():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/ix",
-            status=404
-        )
-        result = importers.import_ixps()
-        assert result is False
-
-
-def test_with_empty_response_does_nothing():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/ix",
-            body=""
-        )
-        importers.import_ixps()
-
-        ixps = IXP.objects.all()
-        assert len(ixps) == 0
+    ixps = IXP.objects.all()
+    assert len(ixps) == 0
 
 
 def test_imports_a_new_ixp():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/ix",
-            body=json.dumps({"data": [dummy_ixp_data]}),
-        )
-        importers.import_ixps()
+    importers.process_ixp_data([dummy_ixp_data])
 
-        ixps = IXP.objects.all()
-        assert len(ixps) == 1
+    ixps = IXP.objects.all()
+    assert len(ixps) == 1
 
 
 def test_updates_an_existing_ixp():
@@ -81,14 +48,19 @@ def test_updates_an_existing_ixp():
     )
     ixp.save()
 
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/ix",
-            body=json.dumps({"data": [dummy_ixp_data]}),
-        )
-        importers.import_ixps()
+    importers.process_ixp_data([dummy_ixp_data])
 
-        ixps = IXP.objects.all()
-        assert len(ixps) == 1
-        assert ixps.first().last_active.date() == datetime.utcnow().date()
-        assert ixps.first().name == dummy_ixp_data["name"]
+    ixps = IXP.objects.all()
+    assert len(ixps) == 1
+    assert ixps.first().last_active.date() == datetime.utcnow().date()
+    assert ixps.first().name == dummy_ixp_data["name"]
+
+
+def test_handles_errors_with_source_data():
+    data_with_problems = dummy_ixp_data
+    data_with_problems["created"] = "abc"
+
+    importers.process_ixp_data([data_with_problems])
+
+    ixps = IXP.objects.all()
+    assert len(ixps) == 0

@@ -22,7 +22,7 @@ class IXP(models.Model):
         verbose_name_plural = _("Internet Exchange Points")
 
         constraints = [
-            models.UniqueConstraint(fields=['peeringdb_id'], name='unique_ixp_peeringdb_id')
+            models.UniqueConstraint(fields=['peeringdb_id'], name='ixp_tracker_unique_ixp_peeringdb_id')
         ]
 
 
@@ -53,5 +53,27 @@ class ASN(models.Model):
         verbose_name_plural = "AS Numbers"
 
         constraints = [
-            models.UniqueConstraint(fields=['number'], name='unique_as_number')
+            models.UniqueConstraint(fields=['number'], name='ixp_tracker_unique_as_number')
+        ]
+
+
+class IXPMember(models.Model):
+    ixp = models.ForeignKey(IXP, on_delete=models.CASCADE)
+    asn = models.ForeignKey(ASN, on_delete=models.CASCADE)
+    member_since = models.DateField()
+    last_updated = models.DateTimeField()
+    is_rs_peer = models.BooleanField(default=False)
+    speed = models.IntegerField(null=True)
+    date_left = models.DateField(null=True)
+    last_active = models.DateTimeField(null=True)
+
+    def __str__(self):
+        return self.ixp.name + " - " + self.asn.name
+
+    class Meta:
+        verbose_name = "IXP Member"
+        verbose_name_plural = "IXP Members"
+
+        constraints = [
+            models.UniqueConstraint(fields=['ixp', 'asn'], name='ixp_tracker_unique_ixp_membership')
         ]

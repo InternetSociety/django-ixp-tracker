@@ -27,37 +27,16 @@ class TestLookup:
         assert asn > 0
         return "AU"
 
-
-def test_with_no_import_date_queries_peering_db_directly():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0",
-            body=json.dumps({"data": []}),
-        )
-        result = importers.import_asns(TestLookup())
-        assert result
-
-
-def test_returns_false_if_query_fails():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0",
-            status=404
-        )
-        result = importers.import_asns(TestLookup())
-        assert result is False
+    def get_status(self, asn: int, as_at: datetime) -> str:
+        pass
 
 
 def test_with_empty_response_does_nothing():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0",
-            body=""
-        )
-        importers.import_asns(TestLookup())
+    processor = importers.process_asn_data(TestLookup())
+    processor([])
 
-        asns = ASN.objects.all()
-        assert len(asns) == 0
+    asns = ASN.objects.all()
+    assert len(asns) == 0
 
 
 def test_with_no_existing_data_gets_all_data():
@@ -73,19 +52,11 @@ def test_with_no_existing_data_gets_all_data():
 
 
 def test_imports_new_asn():
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0",
-            body=json.dumps({"data": [dummy_asn_data]}),
-        )
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=200",
-            body=json.dumps({"data": []}),
-        )
-        importers.import_asns(TestLookup(), False)
+    processor = importers.process_asn_data(TestLookup())
+    processor([dummy_asn_data])
 
-        asns = ASN.objects.all()
-        assert len(asns) == 1
+    asns = ASN.objects.all()
+    assert len(asns) == 1
 
 
 def test_updates_existing_data():
@@ -96,16 +67,16 @@ def test_updates_existing_data():
         network_type="other",
         registration_country="CH",
         created="2019-01-01",
-        last_updated="2024-05-31"
+        last_updated="2024-05-01"
     )
     asn.save()
     with responses.RequestsMock() as rsps:
         rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-06-01&limit=200&skip=0",
+            url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-05-01&limit=200&skip=0",
             body=json.dumps({"data": [dummy_asn_data]}),
         )
         rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-06-01&limit=200&skip=200",
+            url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-05-01&limit=200&skip=200",
             body=json.dumps({"data": []}),
         )
         importers.import_asns(TestLookup(), False)
@@ -114,3 +85,16 @@ def test_updates_existing_data():
         assert len(asns) == 1
         updated = asns.filter(peeringdb_id=dummy_asn_data["id"]).first()
         assert updated.name == "New ASN"
+        assert updated.registration_country == "AU"
+
+
+def test_handles_errors_with_source_data():
+    data_with_problems = dummy_asn_data
+    data_with_problems["updated"] = "abc"
+    data_with_problems["asn"] = "foobar"
+
+    processor = importers.process_asn_data(TestLookup())
+    processor([data_with_problems])
+
+    asns = ASN.objects.all()
+    assert len(asns) == 0

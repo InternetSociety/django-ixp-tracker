@@ -16,17 +16,27 @@ pip install django-ixp-tracker
 ## Usage
 
 1. Add to your INSTALLED_APPS setting like this:
-
+```
    INSTALLED_APPS = [
    ...,
    "ixp_tracker",
    ]
+```
 
-    Note: this app has no web-facing components so you don't need to add anything to `urls.py` etc
+ Note: this app has no web-facing components so you don't need to add anything to `urls.py` etc
 
-2. Run ``python manage.py migrate`` to create the models.
+2. Run `python manage.py migrate` to create the models.
 3. Add the relevant settings to your config. `IXP_TRACKER_PEERING_DB_URL` will use a default if you don't provide a value so you probably don't need that. But you will need to set `IXP_TRACKER_PEERING_DB_KEY` to authenticate against the API.
-4. Ensure you have code to look up the registration country for an ASN. You should implement the Protocol `ixp_tracker.importers.ASNGeoLookup`
+4. Add `IXP_TRACKER_GEO_LOOKUP_FACTORY` to config with the path to your factory (see below).
+5. Run the management command to import the data: `python manage.py ixp_tracker_import`
+
+## ASN country and status data
+
+The lib uses an external component to look up the country of registration (why?) and the status of an ASN. This status is used for the logic to identify when members have left an IXP.
+
+If you don't provide this service yourself, it will default to a noop version. This will mean you will get no country of registration data and the marking of members having left an IXP will not be as efficient.
+
+In order to implement such a component yourself, you should implement the Protocol `ixp_tracker.importers.ASNGeoLookup` and provide a factory function for your class.
 
 ## Development
 
@@ -58,4 +68,4 @@ Both libs are designed to keep a local copy of the current data and to keep that
 
 As we need to keep a historical record (e.g. for IXP growth stats over time), we would have to provide some sort of wrapper over those libs anyway.
 
-In addition to that, the [historical archives of PeeringDb data](https://publicdata.caida.org/datasets/peeringdb/) use flat lists of the different object types in json. We can retrieve the data from the API in the same way so it makes it simpler to implement.
+In addition to that, the [historical archives of PeeringDb data](https://publicdata.caida.org/datasets/peeringdb/) use flat lists of the different object types in json. We can retrieve the data from the API directly in the same way, so it makes it simpler to implement.
