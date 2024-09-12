@@ -21,3 +21,5 @@ except AttributeError:
     IXP_TRACKER_PEERING_DB_KEY = None
 except(TypeError, ValueError):
     raise ImproperlyConfigured("IXP_TRACKER_PEERING_DB_KEY must be a string value")
+
+DATA_ARCHIVE_URL = "https://publicdata.caida.org/datasets/peeringdb/{year}/{month:02d}/peeringdb_2_dump_{year}_{month:02d}_{day:02d}.json"

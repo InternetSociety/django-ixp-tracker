@@ -1,7 +1,7 @@
 import importlib
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 from django.core.management import BaseCommand
 
@@ -37,16 +37,22 @@ class Command(BaseCommand):
     help = "Updates IXP data"
 
     def add_arguments(self, parser):
-        parser.add_argument("--reset", action="store_true", default=False, help="Do a full reset rather than incremental update where appropriate")
-        parser.add_argument("--geo-lookup", type=str, help="The name of your geo lookup factory")
+        parser.add_argument("--reset-asns", action="store_true", default=False, help="Do a full reset of ASNs rather than incremental update")
+        parser.add_argument("--backfill", type=str, default=None, help="The month you would like to backfill data for")
 
     def handle(self, *args, **options):
         try:
             logger.debug("Importing IXP data")
             geo_lookup = load_geo_lookup(IXP_TRACKER_GEO_LOOKUP_FACTORY) or DefaultASNGeoLookup()
-            page_limit = 200
-            reset = options["reset"]
-            import_data(geo_lookup, reset, page_limit)
+            reset = options["reset_asns"]
+            backfill_date = options["backfill"]
+            if backfill_date is None:
+                import_data(geo_lookup, reset)
+            else:
+                processing_date = datetime.strptime(backfill_date, "%Y%m").replace(tzinfo=timezone.utc)
+                if reset:
+                    logger.warning("The --reset option has no effect when running a backfill")
+                import_data(geo_lookup, False, processing_date)
 
             logger.info("Import finished")
         except Exception as e:

@@ -1,12 +1,14 @@
+import ast
+import json
+from json.decoder import JSONDecodeError
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Protocol
 
 import requests
 import dateutil.parser
-from requests.exceptions import JSONDecodeError
 
-from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL
+from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
 
 logger = logging.getLogger("ixp_tracker")
@@ -21,13 +23,46 @@ class ASNGeoLookup(Protocol):
         pass
 
 
-def import_data(geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200):
-    import_ixps()
-    logger.debug("Imported IXPs")
-    import_asns(geo_lookup, reset, page_limit)
-    logger.debug("Imported ASNs")
-    import_members(geo_lookup)
-    logger.debug("Imported members")
+def import_data(
+        geo_lookup: ASNGeoLookup,
+        reset: bool = False,
+        processing_date: datetime = None,
+        page_limit: int = 200
+):
+    if processing_date is None:
+        processing_date = datetime.utcnow().replace(tzinfo=timezone.utc)
+        import_ixps(processing_date)
+        logger.debug("Imported IXPs")
+        import_asns(geo_lookup, reset, page_limit)
+        logger.debug("Imported ASNs")
+        import_members(processing_date, geo_lookup)
+        logger.debug("Imported members")
+    else:
+        processing_date = processing_date.replace(day=1)
+        processing_month = processing_date.month
+        found = False
+        while processing_date.month == processing_month and not found:
+            url = DATA_ARCHIVE_URL.format(year=processing_date.year, month=processing_date.month, day=processing_date.day)
+            data = requests.get(url)
+            if data.status_code == 200:
+                found = True
+            else:
+                processing_date = processing_date + timedelta(days=1)
+        if not found:
+            logger.warning("Cannot find backfill data", extra={"backfill_date": processing_date})
+            return
+        backfill_raw = data.text
+        try:
+            backfill_data = json.loads(backfill_raw)
+        except JSONDecodeError:
+            # It seems some of the Peering dumps use single quotes so try and load using ast in this case
+            backfill_data = ast.literal_eval(backfill_raw)
+        ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
+        process_ixp_data(processing_date)(ixp_data)
+        asn_data = backfill_data.get("net", {"data": []}).get("data", [])
+        process_asn_data(geo_lookup)(asn_data)
+        member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
+        process_member_data(processing_date, geo_lookup)(member_data)
 
 
 def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: datetime = None) -> bool:
@@ -57,32 +92,32 @@ def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: d
     return True
 
 
-def import_ixps() -> bool:
-    return get_data("/ix", process_ixp_data)
+def import_ixps(processing_date) -> bool:
+    return get_data("/ix", process_ixp_data(processing_date))
 
 
-def process_ixp_data(all_ixp_data):
-    reporting_date = datetime.utcnow().replace(tzinfo=timezone.utc)
-    for ixp_data in all_ixp_data:
-        try:
-            models.IXP.objects.update_or_create(
-                peeringdb_id=ixp_data["id"],
-                defaults={
-                    "name": ixp_data["name"],
-                    "long_name": ixp_data["name_long"],
-                    "city": ixp_data["city"],
-                    "website": ixp_data["website"],
-                    "active_status": True,
-                    "country": ixp_data["country"],
-                    "created": ixp_data["created"],
-                    "last_updated": ixp_data["updated"],
-                    "last_active": reporting_date,
-                }
-            )
-            logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})
-        except Exception as e:
-            logger.warning("Cannot import IXP data", extra={"error": str(e)})
-    return True
+def process_ixp_data(processing_date: datetime):
+    def do_process_ixp_data(all_ixp_data):
+        for ixp_data in all_ixp_data:
+            try:
+                models.IXP.objects.update_or_create(
+                    peeringdb_id=ixp_data["id"],
+                    defaults={
+                        "name": ixp_data["name"],
+                        "long_name": ixp_data["name_long"],
+                        "city": ixp_data["city"],
+                        "website": ixp_data["website"],
+                        "active_status": True,
+                        "country": ixp_data["country"],
+                        "created": ixp_data["created"],
+                        "last_updated": ixp_data["updated"],
+                        "last_active": processing_date,
+                    }
+                )
+                logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})
+            except Exception as e:
+                logger.warning("Cannot import IXP data", extra={"error": str(e)})
+    return do_process_ixp_data
 
 
 def import_asns(geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200) -> bool:
@@ -118,13 +153,12 @@ def process_asn_data(geo_lookup):
     return process_asn_paged_data
 
 
-def import_members(geo_lookup: ASNGeoLookup) -> bool:
+def import_members(processing_date: datetime, geo_lookup: ASNGeoLookup) -> bool:
     logger.debug("Fetching IXP member data")
-    return get_data("/netixlan", process_member_data(geo_lookup))
+    return get_data("/netixlan", process_member_data(processing_date, geo_lookup))
 
 
-def process_member_data(geo_lookup: ASNGeoLookup):
-    reporting_date = datetime.utcnow().replace(tzinfo=timezone.utc)
+def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
 
     def do_process_member_data(all_member_data):
         for member_data in all_member_data:
@@ -147,11 +181,11 @@ def process_member_data(geo_lookup: ASNGeoLookup):
                     "last_updated": member_data["updated"],
                     "is_rs_peer": member_data["is_rs_peer"],
                     "speed": member_data["speed"],
-                    "last_active": reporting_date,
+                    "last_active": processing_date,
                 }
             )
             logger.debug("Imported IXP member record", extra=log_data)
-        start_of_month = reporting_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_of_month = processing_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         inactive = models.IXPMember.objects.filter(date_left=None, last_active__lt=start_of_month).all()
         for member in inactive:
             start_of_next_of_month = (member.last_active.replace(day=1) + timedelta(days=33)).replace(day=1)
@@ -161,7 +195,7 @@ def process_member_data(geo_lookup: ASNGeoLookup):
             logger.debug("Member flagged as left due to inactivity", extra={"member": member.asn.number})
         candidates = models.IXPMember.objects.filter(date_left=None, asn__registration_country="ZZ").all()
         for candidate in candidates:
-            if geo_lookup.get_status(candidate.asn.number, reporting_date) != "assigned":
+            if geo_lookup.get_status(candidate.asn.number, processing_date) != "assigned":
                 end_of_last_month_active = (candidate.last_active.replace(day=1) - timedelta(days=1))
                 candidate.date_left = end_of_last_month_active
                 candidate.save()

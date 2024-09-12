@@ -17,6 +17,7 @@ dummy_member_data = {
     "speed": 10000,
 }
 
+date_now = datetime.utcnow().replace(tzinfo=timezone.utc)
 
 class TestLookup:
 
@@ -33,7 +34,7 @@ class TestLookup:
 
 
 def test_with_no_data_does_nothing():
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([])
 
     members = IXPMember.objects.all()
@@ -44,7 +45,7 @@ def test_adds_new_member():
     create_asn_fixture(dummy_member_data["asn"])
     create_ixp_fixture(dummy_member_data["ix_id"])
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([dummy_member_data])
 
     members = IXPMember.objects.all()
@@ -54,7 +55,7 @@ def test_adds_new_member():
 def test_does_nothing_if_no_asn_found():
     create_ixp_fixture(dummy_member_data["ix_id"])
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([dummy_member_data])
 
     members = IXPMember.objects.all()
@@ -64,7 +65,7 @@ def test_does_nothing_if_no_asn_found():
 def test_does_nothing_if_no_ixp_found():
     create_asn_fixture(dummy_member_data["asn"])
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([dummy_member_data])
 
     members = IXPMember.objects.all()
@@ -85,7 +86,7 @@ def test_updates_existing_member():
     )
     member.save()
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([dummy_member_data])
 
     members = IXPMember.objects.all()
@@ -113,7 +114,7 @@ def test_marks_member_as_left_that_is_no_longer_active():
     members = IXPMember.objects.all()
     assert members.first().date_left is None
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([])
 
     members = IXPMember.objects.all()
@@ -136,7 +137,7 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
     members = IXPMember.objects.all()
     assert members.first().date_left is None
 
-    processor = importers.process_member_data(TestLookup())
+    processor = importers.process_member_data(date_now, TestLookup())
     processor([])
 
     members = IXPMember.objects.all()
@@ -161,7 +162,7 @@ def test_marks_member_as_left_if_asn_is_not_assigned():
     members = IXPMember.objects.all()
     assert members.first().date_left is None
 
-    processor = importers.process_member_data(TestLookup("available"))
+    processor = importers.process_member_data(date_now, TestLookup("available"))
     processor([])
 
     members = IXPMember.objects.all()

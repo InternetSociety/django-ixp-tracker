@@ -28,7 +28,7 @@ pip install django-ixp-tracker
 2. Run `python manage.py migrate` to create the models.
 3. Add the relevant settings to your config. `IXP_TRACKER_PEERING_DB_URL` will use a default if you don't provide a value so you probably don't need that. But you will need to set `IXP_TRACKER_PEERING_DB_KEY` to authenticate against the API.
 4. Add `IXP_TRACKER_GEO_LOOKUP_FACTORY` to config with the path to your factory (see below).
-5. Run the management command to import the data: `python manage.py ixp_tracker_import`
+5. Run the management command to import the data: `python manage.py ixp_tracker_import` (This will sync the current data, if you want historical data you need to backfill first)
 
 ## ASN country and status data
 
@@ -37,6 +37,22 @@ The lib uses an external component to look up the country of registration (why?)
 If you don't provide this service yourself, it will default to a noop version. This will mean you will get no country of registration data and the marking of members having left an IXP will not be as efficient.
 
 In order to implement such a component yourself, you should implement the Protocol `ixp_tracker.importers.ASNGeoLookup` and provide a factory function for your class.
+
+## Backfilling data
+
+You have the option of backfilling data from archived PeeringDb data. This can be done by running the import command with the `--backfill` option for each month you want to backfill:
+```shell
+python manage.py ixp_tracker_import --backfill <YYYMM>
+```
+The backfill currently process a single month at a time and will look for the earliest file for the relevant month at https://publicdata.caida.org/datasets/peeringdb/
+
+IMPORTANT NOTE: due to the way the code tries to figure out when a member left an IXP, you should run the backfill strictly in date order and *before* syncing the current data.
+
+## Running programmatically
+
+If you'd like to run the import from code, rather than from the management command, you can call `importers.import_data()` directly.
+
+It's not recommended to call any other functions yourself.
 
 ## Development
 

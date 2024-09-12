@@ -20,14 +20,14 @@ dummy_ixp_data = {
 
 
 def test_with_no_data_does_nothing():
-    importers.process_ixp_data([])
+    importers.process_ixp_data(datetime.utcnow())([])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
 
 
 def test_imports_a_new_ixp():
-    importers.process_ixp_data([dummy_ixp_data])
+    importers.process_ixp_data(datetime.utcnow())([dummy_ixp_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1
@@ -48,7 +48,7 @@ def test_updates_an_existing_ixp():
     )
     ixp.save()
 
-    importers.process_ixp_data([dummy_ixp_data])
+    importers.process_ixp_data(datetime.utcnow())([dummy_ixp_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1
@@ -60,7 +60,7 @@ def test_handles_errors_with_source_data():
     data_with_problems = dummy_ixp_data
     data_with_problems["created"] = "abc"
 
-    importers.process_ixp_data([data_with_problems])
+    importers.process_ixp_data(datetime.utcnow())([data_with_problems])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
