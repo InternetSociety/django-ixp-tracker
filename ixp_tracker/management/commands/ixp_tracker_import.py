@@ -2,11 +2,13 @@ import importlib
 import logging
 import traceback
 from datetime import datetime, timezone
+from typing import List
 
 from django.core.management import BaseCommand
 
 from ixp_tracker.conf import IXP_TRACKER_GEO_LOOKUP_FACTORY
 from ixp_tracker.importers import ASNGeoLookup, import_data
+from ixp_tracker.stats import generate_stats
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -18,6 +20,9 @@ class DefaultASNGeoLookup(ASNGeoLookup):
 
     def get_status(self, asn: int, as_at: datetime) -> str:
         return "assigned"
+
+    def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        pass
 
 
 def load_geo_lookup(geo_lookup_name):
@@ -46,6 +51,7 @@ class Command(BaseCommand):
             geo_lookup = load_geo_lookup(IXP_TRACKER_GEO_LOOKUP_FACTORY) or DefaultASNGeoLookup()
             reset = options["reset_asns"]
             backfill_date = options["backfill"]
+            processing_date = None
             if backfill_date is None:
                 import_data(geo_lookup, reset)
             else:
@@ -54,6 +60,8 @@ class Command(BaseCommand):
                     logger.warning("The --reset option has no effect when running a backfill")
                 import_data(geo_lookup, False, processing_date)
 
+            logger.debug("Generating stats")
+            generate_stats(geo_lookup, processing_date)
             logger.info("Import finished")
         except Exception as e:
             logging.error("Failed to import data", extra={"error": str(e), "trace": traceback.format_exc()})

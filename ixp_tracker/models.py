@@ -9,7 +9,7 @@ class IXP(models.Model):
     website = models.URLField(null=True)
     active_status = models.BooleanField(default=True)
     peeringdb_id = models.IntegerField(null=True)
-    country = models.CharField(max_length=2)
+    country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
     last_active = models.DateTimeField(null=True)
@@ -41,7 +41,7 @@ class ASN(models.Model):
     number = models.IntegerField()
     peeringdb_id = models.IntegerField(null=True)
     network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default='not-disclosed')
-    registration_country = models.CharField(max_length=2)
+    registration_country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
 
@@ -68,7 +68,7 @@ class IXPMember(models.Model):
     last_active = models.DateTimeField(null=True)
 
     def __str__(self):
-        return self.ixp.name + " - " + self.asn.name
+        return f"{self.ixp.name} - {self.asn.name}"
 
     class Meta:
         verbose_name = "IXP Member"
@@ -76,4 +76,40 @@ class IXPMember(models.Model):
 
         constraints = [
             models.UniqueConstraint(fields=['ixp', 'asn'], name='ixp_tracker_unique_ixp_membership')
+        ]
+
+
+class StatsPerIXP(models.Model):
+    ixp = models.ForeignKey(IXP, on_delete=models.CASCADE)
+    stats_date = models.DateField()
+    capacity = models.FloatField()
+    members = models.IntegerField()
+    local_asns_members_rate = models.FloatField()
+
+    def __str__(self):
+        return f"{self.ixp.name} - {self.stats_date}"
+
+    class Meta:
+        verbose_name = "IXP stats"
+
+        constraints = [
+            models.UniqueConstraint(fields=['ixp', 'stats_date'], name='ixp_tracker_unique_ixp_stats')
+        ]
+
+class StatsPerCountry(models.Model):
+    country_code = models.CharField(max_length=2)
+    stats_date = models.DateField()
+    asn_count = models.IntegerField()
+    member_count = models.IntegerField()
+    asns_ixp_member_rate = models.FloatField()
+    total_capacity = models.FloatField()
+
+    def __str__(self):
+        return f"{self.country_code}-{self.stats_date}-{self.asn_count}-{self.member_count}"
+
+    class Meta:
+        verbose_name = "Per-country stats"
+
+        constraints = [
+            models.UniqueConstraint(fields=['country_code', 'stats_date'], name='ixp_tracker_unique_per_country_stats')
         ]

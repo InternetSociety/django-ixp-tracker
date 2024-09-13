@@ -65,7 +65,7 @@ def test_updates_existing_data():
         number=dummy_asn_data["asn"],
         peeringdb_id=dummy_asn_data["id"],
         network_type="other",
-        registration_country="CH",
+        registration_country_code="CH",
         created="2019-01-01",
         last_updated="2024-05-01"
     )
@@ -85,7 +85,7 @@ def test_updates_existing_data():
         assert len(asns) == 1
         updated = asns.filter(peeringdb_id=dummy_asn_data["id"]).first()
         assert updated.name == "New ASN"
-        assert updated.registration_country == "AU"
+        assert updated.registration_country_code == "AU"
 
 
 def test_handles_errors_with_source_data():

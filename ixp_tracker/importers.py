@@ -3,10 +3,11 @@ import json
 from json.decoder import JSONDecodeError
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Protocol
+from typing import Callable, List, Protocol
 
 import requests
 import dateutil.parser
+from django_countries import countries
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
@@ -20,6 +21,9 @@ class ASNGeoLookup(Protocol):
         pass
 
     def get_status(self, asn: int, as_at: datetime) -> str:
+        pass
+
+    def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         pass
 
 
@@ -99,6 +103,10 @@ def import_ixps(processing_date) -> bool:
 def process_ixp_data(processing_date: datetime):
     def do_process_ixp_data(all_ixp_data):
         for ixp_data in all_ixp_data:
+            country_data = countries.alpha2(ixp_data["country"])
+            if len(country_data) == 0:
+                logger.warning("Skipping IXP import as country code not found", extra={"country": ixp_data["country"], "id": ixp_data["id"]})
+                continue
             try:
                 models.IXP.objects.update_or_create(
                     peeringdb_id=ixp_data["id"],
@@ -108,7 +116,7 @@ def process_ixp_data(processing_date: datetime):
                         "city": ixp_data["city"],
                         "website": ixp_data["website"],
                         "active_status": True,
-                        "country": ixp_data["country"],
+                        "country_code": ixp_data["country"],
                         "created": ixp_data["created"],
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
@@ -142,7 +150,7 @@ def process_asn_data(geo_lookup):
                         "name": asn_data["name"],
                         "number": asn,
                         "network_type": asn_data["info_type"],
-                        "registration_country": geo_lookup.get_iso2_country(asn, last_updated),
+                        "registration_country_code": geo_lookup.get_iso2_country(asn, last_updated),
                         "created": asn_data["created"],
                         "last_updated": last_updated,
                     }
@@ -193,7 +201,7 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
             member.date_left = end_of_month
             member.save()
             logger.debug("Member flagged as left due to inactivity", extra={"member": member.asn.number})
-        candidates = models.IXPMember.objects.filter(date_left=None, asn__registration_country="ZZ").all()
+        candidates = models.IXPMember.objects.filter(date_left=None, asn__registration_country_code="ZZ").all()
         for candidate in candidates:
             if geo_lookup.get_status(candidate.asn.number, processing_date) != "assigned":
                 end_of_last_month_active = (candidate.last_active.replace(day=1) - timedelta(days=1))

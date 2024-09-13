@@ -48,6 +48,10 @@ The backfill currently process a single month at a time and will look for the ea
 
 IMPORTANT NOTE: due to the way the code tries to figure out when a member left an IXP, you should run the backfill strictly in date order and *before* syncing the current data.
 
+## IXP stats
+
+The import process also generates monthly stats per IXP and per country. These are generated as of the 1st of the month used to import the data.
+
 ## Running programmatically
 
 If you'd like to run the import from code, rather than from the management command, you can call `importers.import_data()` directly.
