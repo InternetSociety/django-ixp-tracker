@@ -6,7 +6,7 @@ from django_countries import countries
 from django.db.models import Q
 
 from ixp_tracker.importers import ASNGeoLookup
-from ixp_tracker.models import IXP, IXPMember, StatsPerCountry, StatsPerIXP
+from ixp_tracker.models import IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -22,8 +22,8 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     stats_date = stats_date.replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_members = (IXPMember.objects
-                   .filter(member_since__lte=stats_date)
-                   .filter(Q(date_left=None) | Q(date_left__gte=stats_date))).all()
+                   .filter(memberships__start_date__lte=stats_date)
+                   .filter(Q(memberships__end_date=None) | Q(memberships__end_date__gte=stats_date))).all()
     all_stats_per_country: Dict[str, CountryStats] = {}
     for code, _ in list(countries):
         all_stats_per_country[code] = {
@@ -35,7 +35,13 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
         members = [member for member in all_members if member.ixp == ixp]
         member_count = len(members)
-        capacity = sum(member.speed for member in members)
+        capacity = 0
+        for member in members:
+            membership = (IXPMembershipRecord.objects
+                .filter(start_date__lte=stats_date, member=member)
+                .filter(Q(end_date=None) | Q(end_date__gte=stats_date))).first()
+            if membership is not None:
+                capacity += membership.speed
         ixp_country = ixp.country_code
         country_stats = all_stats_per_country.get(ixp_country)
         if country_stats is None:

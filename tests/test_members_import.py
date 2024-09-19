@@ -4,7 +4,8 @@ import dateutil.parser
 import pytest
 
 from ixp_tracker import importers
-from ixp_tracker.models import ASN, IXP, IXPMember
+from ixp_tracker.importers import ASNGeoLookup
+from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord
 
 pytestmark = pytest.mark.django_db
 
@@ -19,7 +20,7 @@ dummy_member_data = {
 
 date_now = datetime.utcnow().replace(tzinfo=timezone.utc)
 
-class TestLookup:
+class TestLookup(ASNGeoLookup):
 
     def __init__(self, default_status: str = "assigned"):
         self.default_status = default_status
@@ -50,6 +51,8 @@ def test_adds_new_member():
 
     members = IXPMember.objects.all()
     assert len(members) == 1
+    current_membership = IXPMembershipRecord.objects.filter(member=members.first())
+    assert len(current_membership) == 1
 
 
 def test_does_nothing_if_no_asn_found():
@@ -78,10 +81,7 @@ def test_updates_existing_member():
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        member_since=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
         last_updated=dummy_member_data["updated"],
-        is_rs_peer=False,
-        speed=500,
         last_active=datetime(year=2023, month=7, day=13)
     )
     member.save()
@@ -92,8 +92,64 @@ def test_updates_existing_member():
     members = IXPMember.objects.all()
     assert len(members) == 1
     updated = members.first()
-    assert updated.is_rs_peer is True
-    assert updated.speed == dummy_member_data["speed"]
+    assert updated.last_active.year > 2023
+
+
+def test_updates_membership_for_existing_member():
+    asn = create_asn_fixture(dummy_member_data["asn"])
+    ixp = create_ixp_fixture(dummy_member_data["ix_id"])
+    member = IXPMember(
+        ixp=ixp,
+        asn=asn,
+        last_updated=dummy_member_data["updated"],
+        last_active=datetime(year=2023, month=7, day=13)
+    )
+    member.save()
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=datetime(year=2023, month=7, day=13).date(),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+
+    processor = importers.process_member_data(date_now, TestLookup())
+    processor([dummy_member_data])
+
+    membership = IXPMembershipRecord.objects.filter(member=member)
+    assert len(membership) == 1
+    current_membership = membership.first()
+    assert current_membership.is_rs_peer
+    assert current_membership.speed == 10000
+
+
+def test_adds_new_membership_for_existing_member_marked_as_left():
+    asn = create_asn_fixture(dummy_member_data["asn"])
+    ixp = create_ixp_fixture(dummy_member_data["ix_id"])
+    member = IXPMember(
+        ixp=ixp,
+        asn=asn,
+        last_updated=dummy_member_data["updated"],
+        last_active=datetime(year=2023, month=7, day=13)
+    )
+    member.save()
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=datetime(year=2018, month=1, day=3).date(),
+        end_date=datetime(year=2018, month=7, day=13),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+
+    processor = importers.process_member_data(date_now, TestLookup())
+    processor([dummy_member_data])
+
+    members = IXPMember.objects.all()
+    assert len(members) == 1
+    current_membership = IXPMembershipRecord.objects.filter(member=member).order_by("-start_date")
+    assert len(current_membership) == 2
+    assert current_membership.first().end_date is None
 
 
 def test_marks_member_as_left_that_is_no_longer_active():
@@ -104,21 +160,25 @@ def test_marks_member_as_left_that_is_no_longer_active():
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        member_since=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
         last_updated=dummy_member_data["updated"],
-        is_rs_peer=False,
-        speed=500,
         last_active=last_day_of_last_month
     )
     member.save()
-    members = IXPMember.objects.all()
-    assert members.first().date_left is None
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date is None
 
     processor = importers.process_member_data(date_now, TestLookup())
     processor([])
 
-    members = IXPMember.objects.all()
-    assert members.first().date_left.strftime("%Y-%m-%d") == last_day_of_last_month.strftime("%Y-%m-%d")
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date.strftime("%Y-%m-%d") == last_day_of_last_month.strftime("%Y-%m-%d")
 
 
 def test_does_not_mark_member_as_left_if_asn_is_assigned():
@@ -127,21 +187,25 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        member_since=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
         last_updated=dummy_member_data["updated"],
-        is_rs_peer=False,
-        speed=500,
         last_active=datetime.utcnow()
     )
     member.save()
-    members = IXPMember.objects.all()
-    assert members.first().date_left is None
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date is None
 
     processor = importers.process_member_data(date_now, TestLookup())
     processor([])
 
-    members = IXPMember.objects.all()
-    assert members.first().date_left is None
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date is None
 
 
 def test_marks_member_as_left_if_asn_is_not_assigned():
@@ -152,21 +216,25 @@ def test_marks_member_as_left_if_asn_is_not_assigned():
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        member_since=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
         last_updated=dummy_member_data["updated"],
-        is_rs_peer=False,
-        speed=500,
         last_active=datetime.utcnow()
     )
     member.save()
-    members = IXPMember.objects.all()
-    assert members.first().date_left is None
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date is None
 
     processor = importers.process_member_data(date_now, TestLookup("available"))
     processor([])
 
-    members = IXPMember.objects.all()
-    assert members.first().date_left.strftime("%Y-%m-%d") == last_day_of_last_month.strftime("%Y-%m-%d")
+    current_membership = IXPMembershipRecord.objects.filter(member=member)
+    assert current_membership.first().end_date.strftime("%Y-%m-%d") == last_day_of_last_month.strftime("%Y-%m-%d")
 
 
 def create_asn_fixture(as_number: int, country: str = "CH"):

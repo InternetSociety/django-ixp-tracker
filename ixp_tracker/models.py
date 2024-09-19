@@ -60,11 +60,7 @@ class ASN(models.Model):
 class IXPMember(models.Model):
     ixp = models.ForeignKey(IXP, on_delete=models.CASCADE)
     asn = models.ForeignKey(ASN, on_delete=models.CASCADE)
-    member_since = models.DateField()
     last_updated = models.DateTimeField()
-    is_rs_peer = models.BooleanField(default=False)
-    speed = models.IntegerField(null=True)
-    date_left = models.DateField(null=True)
     last_active = models.DateTimeField(null=True)
 
     def __str__(self):
@@ -77,6 +73,21 @@ class IXPMember(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['ixp', 'asn'], name='ixp_tracker_unique_ixp_membership')
         ]
+
+
+class IXPMembershipRecord(models.Model):
+    member = models.ForeignKey(IXPMember, on_delete=models.CASCADE, related_name="memberships")
+    start_date = models.DateField()
+    is_rs_peer = models.BooleanField(default=False)
+    speed = models.IntegerField(null=True)
+    end_date = models.DateField(null=True)
+
+    def __str__(self):
+        return f"Membership record {self.member} from {self.start_date} to {self.end_date}"
+
+    class Meta:
+        verbose_name = "IXP Membership record"
+        verbose_name_plural = "IXP Membership records"
 
 
 class StatsPerIXP(models.Model):

@@ -3,7 +3,7 @@ from typing import List
 
 import pytest
 
-from ixp_tracker.models import IXPMember, StatsPerIXP
+from ixp_tracker.models import IXPMember, IXPMembershipRecord, StatsPerIXP
 from ixp_tracker.stats import calculate_local_asns_members_rate, generate_stats
 from tests.test_members_import import create_asn_fixture, create_ixp_fixture
 
@@ -132,11 +132,15 @@ def create_member_fixture(ixp, as_number, speed, date_left = None, member_since 
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        member_since=member_since,
         last_updated=datetime.utcnow(),
-        is_rs_peer=False,
-        speed=speed,
-        date_left=date_left,
         last_active=last_active
     )
     member.save()
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=member_since,
+        is_rs_peer=False,
+        speed=speed,
+        end_date=date_left
+    )
+    membership.save()

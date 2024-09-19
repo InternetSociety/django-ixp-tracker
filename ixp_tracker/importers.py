@@ -11,6 +11,7 @@ from django_countries import countries
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
+from ixp_tracker.models import IXPMembershipRecord
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -181,32 +182,62 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
             except models.ASN.DoesNotExist:
                 logger.warning("Cannot find ASN")
                 continue
-            models.IXPMember.objects.update_or_create(
+            member, created = models.IXPMember.objects.update_or_create(
                 ixp=ixp,
                 asn=asn,
                 defaults={
-                    "member_since": dateutil.parser.isoparse(member_data["created"]).date(),
                     "last_updated": member_data["updated"],
-                    "is_rs_peer": member_data["is_rs_peer"],
-                    "speed": member_data["speed"],
                     "last_active": processing_date,
                 }
             )
+            created_date = dateutil.parser.isoparse(member_data["created"]).date()
+            membership = models.IXPMembershipRecord.objects.filter(member=member).order_by("-start_date").first()
+            if created or membership is None:
+                membership = IXPMembershipRecord(
+                    member=member,
+                    start_date=created_date,
+                    is_rs_peer=member_data["is_rs_peer"],
+                    speed=member_data["speed"]
+                )
+                membership.save()
+            else:
+                if membership.end_date is None:
+                    # Membership is current so just update the details if needed
+                    membership.is_rs_peer = member_data["is_rs_peer"]
+                    membership.speed = member_data["speed"]
+                else:
+                    if membership.end_date > created_date:
+                        logger.warning("We might have overlapping memberships", extra=log_data)
+                    # Most recent membership has ended so create a new membership record
+                    membership = IXPMembershipRecord(
+                        member=member,
+                        start_date=created_date,
+                        is_rs_peer=member_data["is_rs_peer"],
+                        speed=member_data["speed"]
+                    )
+                membership.save()
+
             logger.debug("Imported IXP member record", extra=log_data)
         start_of_month = processing_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        inactive = models.IXPMember.objects.filter(date_left=None, last_active__lt=start_of_month).all()
+        inactive = models.IXPMember.objects.filter(last_active__lt=start_of_month).all()
         for member in inactive:
+            latest_membership = models.IXPMembershipRecord.objects.filter(member=member).order_by("-start_date").first()
+            if latest_membership.end_date is not None:
+                continue
             start_of_next_of_month = (member.last_active.replace(day=1) + timedelta(days=33)).replace(day=1)
             end_of_month = start_of_next_of_month - timedelta(days=1)
-            member.date_left = end_of_month
-            member.save()
+            latest_membership.end_date = end_of_month
+            latest_membership.save()
             logger.debug("Member flagged as left due to inactivity", extra={"member": member.asn.number})
-        candidates = models.IXPMember.objects.filter(date_left=None, asn__registration_country_code="ZZ").all()
+        candidates = models.IXPMember.objects.filter(asn__registration_country_code="ZZ").all()
         for candidate in candidates:
+            latest_membership = models.IXPMembershipRecord.objects.filter(member=candidate).order_by("-start_date").first()
+            if latest_membership.end_date is not None:
+                continue
             if geo_lookup.get_status(candidate.asn.number, processing_date) != "assigned":
                 end_of_last_month_active = (candidate.last_active.replace(day=1) - timedelta(days=1))
-                candidate.date_left = end_of_last_month_active
-                candidate.save()
+                latest_membership.end_date = end_of_last_month_active
+                latest_membership.save()
                 logger.debug("Member flagged as left due to unassigned ASN", extra={"member": candidate.asn.number})
         logger.info("Fixing members finished")
     return do_process_member_data
