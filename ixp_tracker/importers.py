@@ -170,6 +170,7 @@ def import_members(processing_date: datetime, geo_lookup: ASNGeoLookup) -> bool:
 def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
 
     def do_process_member_data(all_member_data):
+        all_member_data = dedupe_member_data(all_member_data)
         for member_data in all_member_data:
             log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}
             try:
@@ -200,12 +201,16 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                     speed=member_data["speed"]
                 )
                 membership.save()
+                logger.debug("Created new membership for new member", extra=log_data)
             else:
                 if membership.end_date is None:
                     # Membership is current so just update the details if needed
                     membership.is_rs_peer = member_data["is_rs_peer"]
                     membership.speed = member_data["speed"]
                 else:
+                    if created_date == membership.start_date:
+                        # Avoid re-adding a member for the same start_date
+                        continue
                     if membership.end_date > created_date:
                         logger.warning("We might have overlapping memberships", extra=log_data)
                     # Most recent membership has ended so create a new membership record
@@ -215,6 +220,7 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                         is_rs_peer=member_data["is_rs_peer"],
                         speed=member_data["speed"]
                     )
+                    logger.debug("Created new membership as previous one ended", extra=log_data)
                 membership.save()
 
             logger.debug("Imported IXP member record", extra=log_data)
@@ -236,8 +242,24 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                 continue
             if geo_lookup.get_status(candidate.asn.number, processing_date) != "assigned":
                 end_of_last_month_active = (candidate.last_active.replace(day=1) - timedelta(days=1))
+                if end_of_last_month_active.date() < latest_membership.start_date:
+                    # It can happen that a member is immediately marked as left as the AS is not registered to a country
+                    # In this case make sure the date we are using for the membership end date is not before the start_date
+                    end_of_last_month_active = latest_membership.start_date
                 latest_membership.end_date = end_of_last_month_active
                 latest_membership.save()
                 logger.debug("Member flagged as left due to unassigned ASN", extra={"member": candidate.asn.number})
         logger.info("Fixing members finished")
     return do_process_member_data
+
+
+def dedupe_member_data(raw_members_data):
+    deduped_data = {}
+    for raw_member in raw_members_data:
+        member_key = str(raw_member["ix_id"]) + "-" + str(raw_member["asn"])
+        if deduped_data.get(member_key) is None:
+            deduped_data[member_key] = dict(raw_member)
+        else:
+            deduped_data[member_key]["is_rs_peer"] = deduped_data[member_key]["is_rs_peer"] or raw_member["is_rs_peer"]
+            deduped_data[member_key]["speed"] += raw_member["speed"]
+    return list(deduped_data.values())
