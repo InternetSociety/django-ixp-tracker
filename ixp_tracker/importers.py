@@ -212,15 +212,17 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                         # Avoid re-adding a member for the same start_date
                         continue
                     if membership.end_date > created_date:
-                        logger.warning("We might have overlapping memberships", extra=log_data)
-                    # Most recent membership has ended so create a new membership record
-                    membership = IXPMembershipRecord(
-                        member=member,
-                        start_date=created_date,
-                        is_rs_peer=member_data["is_rs_peer"],
-                        speed=member_data["speed"]
-                    )
-                    logger.debug("Created new membership as previous one ended", extra=log_data)
+                        logger.debug("Extending membership", extra=log_data)
+                        membership.end_date = None
+                    else:
+                        # Most recent membership has ended so create a new membership record
+                        membership = IXPMembershipRecord(
+                            member=member,
+                            start_date=created_date,
+                            is_rs_peer=member_data["is_rs_peer"],
+                            speed=member_data["speed"]
+                        )
+                        logger.debug("Created new membership as previous one ended", extra=log_data)
                 membership.save()
 
             logger.debug("Imported IXP member record", extra=log_data)

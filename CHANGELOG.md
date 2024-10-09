@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6
+- extend a membership if created date for imported record is before end date of previous record
+
 ## 0.5
 - fix membership starting after it ended
 - fix import for AS being a member of an IX for multiple prefixes

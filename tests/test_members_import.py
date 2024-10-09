@@ -179,6 +179,37 @@ def test_adds_new_membership_for_existing_member_marked_as_left():
     assert current_membership.first().end_date is None
 
 
+def test_extends_membership_for_member_marked_as_left_if_created_before_date_left():
+    asn = create_asn_fixture(dummy_member_data["asn"])
+    ixp = create_ixp_fixture(dummy_member_data["ix_id"])
+    member = IXPMember(
+        ixp=ixp,
+        asn=asn,
+        last_updated=dummy_member_data["updated"],
+        last_active=datetime(year=2023, month=7, day=13)
+    )
+    member.save()
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=datetime(year=2018, month=1, day=3).date(),
+        end_date=datetime(year=2018, month=7, day=13),
+        is_rs_peer=False,
+        speed=500
+    )
+    membership.save()
+
+    member_data_with_created_date_before_date_left = dict(dummy_member_data)
+    member_data_with_created_date_before_date_left["created"] = "2018-06-24T14:15:22Z"
+    processor = importers.process_member_data(date_now, TestLookup())
+    processor([member_data_with_created_date_before_date_left])
+
+    members = IXPMember.objects.all()
+    assert len(members) == 1
+    current_membership = IXPMembershipRecord.objects.filter(member=member).order_by("-start_date")
+    assert len(current_membership) == 1
+    assert current_membership.first().end_date is None
+
+
 def test_marks_member_as_left_that_is_no_longer_active():
     asn = create_asn_fixture(dummy_member_data["asn"])
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
@@ -311,8 +342,10 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
     )
     membership.save()
 
+    member_data_with_created_date_after_date_left = dict(dummy_member_data)
+    member_data_with_created_date_after_date_left["created"] = "2023-09-24T14:15:22Z"
     processor = importers.process_member_data(date_now, TestLookup())
-    processor([dummy_member_data, dummy_member_data])
+    processor([member_data_with_created_date_after_date_left, member_data_with_created_date_after_date_left])
 
     memberships = IXPMembershipRecord.objects.filter(member=member)
     assert len(memberships) == 2
