@@ -2,6 +2,7 @@
 
 ## 0.6
 - extend a membership if created date for imported record is before end date of previous record
+- toggle IXP active status based on whether there are active memberships
 
 ## 0.5
 - fix membership starting after it ended
