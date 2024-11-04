@@ -7,11 +7,11 @@ from typing import Callable, List, Protocol
 
 import requests
 import dateutil.parser
+from django.db.models import Q
 from django_countries import countries
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
-from ixp_tracker.models import IXPMembershipRecord
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -42,6 +42,8 @@ def import_data(
         logger.debug("Imported ASNs")
         import_members(processing_date, geo_lookup)
         logger.debug("Imported members")
+        toggle_ixp_active_status(processing_date)
+        logger.debug("Toggled IXPs active status")
     else:
         processing_date = processing_date.replace(day=1)
         processing_month = processing_date.month
@@ -68,6 +70,8 @@ def import_data(
         process_asn_data(geo_lookup)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
         process_member_data(processing_date, geo_lookup)(member_data)
+        toggle_ixp_active_status(processing_date)
+        logger.debug("Toggled IXPs active status")
 
 
 def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: datetime = None) -> bool:
@@ -194,7 +198,7 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
             created_date = dateutil.parser.isoparse(member_data["created"]).date()
             membership = models.IXPMembershipRecord.objects.filter(member=member).order_by("-start_date").first()
             if created or membership is None:
-                membership = IXPMembershipRecord(
+                membership = models.IXPMembershipRecord(
                     member=member,
                     start_date=created_date,
                     is_rs_peer=member_data["is_rs_peer"],
@@ -216,7 +220,7 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                         membership.end_date = None
                     else:
                         # Most recent membership has ended so create a new membership record
-                        membership = IXPMembershipRecord(
+                        membership = models.IXPMembershipRecord(
                             member=member,
                             start_date=created_date,
                             is_rs_peer=member_data["is_rs_peer"],
@@ -265,3 +269,22 @@ def dedupe_member_data(raw_members_data):
             deduped_data[member_key]["is_rs_peer"] = deduped_data[member_key]["is_rs_peer"] or raw_member["is_rs_peer"]
             deduped_data[member_key]["speed"] += raw_member["speed"]
     return list(deduped_data.values())
+
+
+def toggle_ixp_active_status(processing_date: datetime):
+    for ixp in models.IXP.objects.all():
+        active_members = (models.IXPMembershipRecord.objects
+                          .filter(member__in=ixp.ixpmember_set.all())
+                          .filter(Q(end_date__isnull=True) | Q(end_date__gte=processing_date))
+        )
+        if ixp.active_status and len(active_members) == 0:
+            ixp.active_status = False
+            ixp.last_active = processing_date
+            ixp.save()
+            logger.debug("Marked IXP as inactive", extra={"ixp": ixp.peeringdb_id})
+        elif not ixp.active_status and len(active_members) > 0:
+            ixp.active_status = True
+            ixp.last_active = processing_date
+            ixp.save()
+            logger.debug("Marked IXP as active", extra={"ixp": ixp.peeringdb_id})
+    return
