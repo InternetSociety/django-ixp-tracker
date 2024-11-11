@@ -68,6 +68,24 @@ def test_does_not_count_members_marked_as_left():
     assert ixp_stats.capacity == 0.5
 
 
+def test_does_not_count_member_twice_if_they_rejoin():
+    ixp = create_ixp_fixture(123)
+    member = create_member_fixture(ixp, 67890, 10000, datetime(year=2024, month=4, day=1).date())
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=datetime(year=2024, month=5, day=1),
+        is_rs_peer=False,
+        speed=5000,
+        end_date=None
+    )
+    membership.save()
+
+    generate_stats(TestLookup())
+
+    ixp_stats = StatsPerIXP.objects.all().first()
+    assert ixp_stats.members == 1
+
+
 def test_does_not_count_members_not_yet_created():
     ixp = create_ixp_fixture(123)
     create_member_fixture(ixp, 12345, 500, member_since=datetime(year=2024, month=1, day=1).date())
@@ -144,3 +162,4 @@ def create_member_fixture(ixp, as_number, speed, date_left = None, member_since 
         end_date=date_left
     )
     membership.save()
+    return member

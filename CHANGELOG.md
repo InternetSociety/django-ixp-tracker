@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7
+- fix bug where rejoined members were being counted twice
+
 ## 0.6
 - extend a membership if created date for imported record is before end date of previous record
 - toggle IXP active status based on whether there are active memberships

@@ -22,8 +22,10 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     stats_date = stats_date.replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_members = (IXPMember.objects
-                   .filter(memberships__start_date__lte=stats_date)
-                   .filter(Q(memberships__end_date=None) | Q(memberships__end_date__gte=stats_date))).all()
+                   .filter(
+                        Q(memberships__start_date__lte=stats_date) &
+                        (Q(memberships__end_date=None) | Q(memberships__end_date__gte=stats_date))
+                    )).all()
     all_stats_per_country: Dict[str, CountryStats] = {}
     for code, _ in list(countries):
         all_stats_per_country[code] = {
