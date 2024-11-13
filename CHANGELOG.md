@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8
+- update `last_updated` rather than `last_active` when active status toggled
+
 ## 0.7
 - fix bug where rejoined members were being counted twice
 

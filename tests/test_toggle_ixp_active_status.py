@@ -31,9 +31,10 @@ def test_active_ixp_with_members_remains_active():
     processing_date = datetime.utcnow().replace(tzinfo=timezone.utc)
     toggle_ixp_active_status(processing_date)
 
-    ixp = IXP.objects.get(peeringdb_id=1)
+    updated_ixp = IXP.objects.get(peeringdb_id=1)
 
-    assert ixp.active_status
+    assert updated_ixp.active_status
+    assert updated_ixp.last_updated == ixp.last_updated
 
 
 def test_active_ixp_with_member_marked_ended_is_marked_inactive():
@@ -58,9 +59,10 @@ def test_active_ixp_with_member_marked_ended_is_marked_inactive():
 
     toggle_ixp_active_status(processing_date)
 
-    ixp = IXP.objects.get(peeringdb_id=1)
+    updated_ixp = IXP.objects.get(peeringdb_id=1)
 
-    assert ixp.active_status is False
+    assert updated_ixp.active_status is False
+    assert updated_ixp.last_updated == processing_date
 
 
 def test_inactive_ixp_with_no_active_members_remains_inactive():
@@ -87,9 +89,10 @@ def test_inactive_ixp_with_no_active_members_remains_inactive():
 
     toggle_ixp_active_status(processing_date)
 
-    ixp = IXP.objects.get(peeringdb_id=1)
+    updated_ixp = IXP.objects.get(peeringdb_id=1)
 
-    assert ixp.active_status is False
+    assert updated_ixp.active_status is False
+    assert updated_ixp.last_updated == ixp.last_updated
 
 
 def test_inactive_ixp_with_active_member_marked_active():
@@ -115,6 +118,7 @@ def test_inactive_ixp_with_active_member_marked_active():
 
     toggle_ixp_active_status(processing_date)
 
-    ixp = IXP.objects.get(peeringdb_id=1)
+    updated_ixp = IXP.objects.get(peeringdb_id=1)
 
-    assert ixp.active_status
+    assert updated_ixp.active_status
+    assert updated_ixp.last_updated == processing_date

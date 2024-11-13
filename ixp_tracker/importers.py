@@ -277,14 +277,17 @@ def toggle_ixp_active_status(processing_date: datetime):
                           .filter(member__in=ixp.ixpmember_set.all())
                           .filter(Q(end_date__isnull=True) | Q(end_date__gte=processing_date))
         )
+        # Note that `last_active` is the date we last saw the IXP in the source data and is used to track deletions
+        # We update `last_updated` here when we toggle the active status as we use that to signify our IXP record has been changed
+        # even though usually `last_updated` is taken from the source data field of the same name
         if ixp.active_status and len(active_members) == 0:
             ixp.active_status = False
-            ixp.last_active = processing_date
+            ixp.last_updated = processing_date
             ixp.save()
             logger.debug("Marked IXP as inactive", extra={"ixp": ixp.peeringdb_id})
         elif not ixp.active_status and len(active_members) > 0:
             ixp.active_status = True
-            ixp.last_active = processing_date
+            ixp.last_updated = processing_date
             ixp.save()
             logger.debug("Marked IXP as active", extra={"ixp": ixp.peeringdb_id})
     return

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ixp_tracker.models import ASN, IXP
 
@@ -29,9 +29,9 @@ def create_ixp_fixture(peering_db_id: int, country = "MM"):
         active_status=True,
         peeringdb_id=peering_db_id,
         country_code=country,
-        created=datetime(year=2020,month=10,day=1),
-        last_updated=datetime(year=2023,month=10,day=1),
-        last_active=datetime(year=2024, month=4, day=1)
+        created=datetime(year=2020,month=10,day=1, tzinfo=timezone.utc),
+        last_updated=datetime(year=2023,month=10,day=1, tzinfo=timezone.utc),
+        last_active=datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
     )
     ixp.save()
     return ixp
