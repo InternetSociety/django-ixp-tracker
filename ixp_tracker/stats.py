@@ -13,6 +13,7 @@ logger = logging.getLogger("ixp_tracker")
 
 class CountryStats(TypedDict):
     all_asns: Union[List[int], None]
+    routed_asns: Union[List[int], None]
     member_asns: set
     total_capacity: int
 
@@ -30,6 +31,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     for code, _ in list(countries):
         all_stats_per_country[code] = {
             "all_asns": None,
+            "routed_asns": None,
             "member_asns": set(),
             "total_capacity": 0
         }
@@ -56,6 +58,8 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             all_stats_per_country[ixp_country] = country_stats
         if country_stats.get("all_asns") is None:
             all_stats_per_country[ixp_country]["all_asns"] = geo_lookup.get_asns_for_country(ixp_country, stats_date)
+        if country_stats.get("routed_asns") is None:
+            all_stats_per_country[ixp_country]["routed_asns"] = geo_lookup.get_routed_asns_for_country(ixp_country, stats_date)
         member_asns = [member.asn.number for member in members]
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         StatsPerIXP.objects.update_or_create(
@@ -77,12 +81,15 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         country_stats = all_stats_per_country[code]
         if country_stats.get("all_asns") is None:
             country_stats["all_asns"] = geo_lookup.get_asns_for_country(code, stats_date)
+        if country_stats.get("routed_asns") is None:
+            country_stats["routed_asns"] = geo_lookup.get_routed_asns_for_country(code, stats_date)
         local_asns_members_rate = calculate_local_asns_members_rate(country_stats["member_asns"], country_stats["all_asns"])
         StatsPerCountry.objects.update_or_create(
             country_code=code,
             stats_date=stats_date.date(),
             defaults={
                 "asn_count": len(country_stats["all_asns"]),
+                "routed_asn_count": len(country_stats["routed_asns"]),
                 "member_count": len(country_stats["member_asns"]),
                 "asns_ixp_member_rate": local_asns_members_rate,
                 "total_capacity": (country_stats["total_capacity"]/1000),
@@ -90,7 +97,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         )
 
 
-def calculate_local_asns_members_rate(member_asns: List[int], country_asns: [int]) -> float:
+def calculate_local_asns_members_rate(member_asns: List[int], country_asns: List[int]) -> float:
     if len(country_asns) == 0:
         return 0
     # Ignore the current country for a member ASN (as that might have changed) but just get all current members

@@ -27,6 +27,9 @@ class ASNGeoLookup(Protocol):
     def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         pass
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        pass
+
 
 def import_data(
         geo_lookup: ASNGeoLookup,
