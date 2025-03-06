@@ -113,6 +113,7 @@ class StatsPerCountry(models.Model):
     stats_date = models.DateField()
     ixp_count = models.IntegerField()
     asn_count = models.IntegerField()
+    routed_asn_count = models.IntegerField()
     member_count = models.IntegerField()
     asns_ixp_member_rate = models.FloatField()
     total_capacity = models.FloatField()
