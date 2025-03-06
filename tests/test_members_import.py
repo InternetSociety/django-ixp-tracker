@@ -46,7 +46,7 @@ multiple_member_data = [
     }
 ]
 
-date_now = datetime.utcnow().replace(tzinfo=timezone.utc)
+date_now = datetime.now(timezone.utc)
 
 class TestLookup(ASNGeoLookup):
 
@@ -57,7 +57,7 @@ class TestLookup(ASNGeoLookup):
         pass
 
     def get_status(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.utcnow().replace(tzinfo=timezone.utc)
+        assert as_at <= datetime.now(timezone.utc)
         assert asn > 0
         return self.default_status
 
@@ -214,7 +214,7 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
 def test_marks_member_as_left_that_is_no_longer_active():
     asn = create_asn_fixture(dummy_member_data["asn"])
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     last_day_of_last_month = (first_day_of_month - timedelta(days=1))
     member = IXPMember(
         ixp=ixp,
@@ -247,7 +247,7 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -270,13 +270,13 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
 def test_marks_member_as_left_if_asn_is_not_assigned():
     asn = create_asn_fixture(dummy_member_data["asn"], "ZZ")
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     last_day_of_last_month = (first_day_of_month - timedelta(days=1))
     member = IXPMember(
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -299,12 +299,12 @@ def test_marks_member_as_left_if_asn_is_not_assigned():
 def test_does_not_mark_as_left_before_joining_date():
     asn = create_asn_fixture(dummy_member_data["asn"], "ZZ")
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     member = IXPMember(
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(

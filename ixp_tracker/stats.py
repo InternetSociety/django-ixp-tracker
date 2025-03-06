@@ -19,7 +19,7 @@ class CountryStats(TypedDict):
 
 
 def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
-    stats_date = stats_date or datetime.utcnow().replace(tzinfo=timezone.utc)
+    stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_members = (IXPMember.objects
