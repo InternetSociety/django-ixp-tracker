@@ -11,7 +11,7 @@ from tests.test_members_import import create_ixp_fixture
 pytestmark = pytest.mark.django_db
 
 
-class TestLookup:
+class GeoTestLookup:
 
     def __init__(self, default_status: str = "assigned"):
         self.default_status = default_status
@@ -25,9 +25,12 @@ class TestLookup:
     def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         return [12345, 446, 789, 5050, 54321]
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        return [12345, 446, 789, 54321]
+
 
 def test_with_no_data_generates_no_stats():
-    generate_stats(TestLookup())
+    generate_stats(GeoTestLookup())
 
     stats = StatsPerCountry.objects.all()
     assert len(stats) == 249
@@ -43,12 +46,13 @@ def test_generates_stats():
     create_member_fixture(ixp_two, 5050, 6000)
     create_member_fixture(ixp_two, 67890, 10000)
 
-    generate_stats(TestLookup())
+    generate_stats(GeoTestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
     # The default fixture does not have a recent last_active date so technically they shouldn't be counted here
     assert stats.ixp_count == 2
     assert stats.asn_count == 5
+    assert stats.routed_asn_count == 4
     assert stats.member_count == 3
     assert stats.total_capacity == 26.5
     assert stats.asns_ixp_member_rate == 0.4
@@ -77,7 +81,7 @@ def test_generates_ixp_counts():
 def test_handles_invalid_country():
     create_ixp_fixture(123, "XK")
 
-    generate_stats(TestLookup())
+    generate_stats(GeoTestLookup())
 
     country_stats = StatsPerCountry.objects.filter(country_code="XK").first()
     assert country_stats is None

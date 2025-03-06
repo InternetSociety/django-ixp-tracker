@@ -147,8 +147,8 @@ def test_calculate_local_asns_members_rate_ignores_members_not_in_country_list()
     assert rate == 0.25
 
 
-def create_member_fixture(ixp, as_number, speed, is_rs_peer = False, date_left = None, member_since = None, asn_country = "CH"):
-    last_active = date_left or datetime.now(timezone.utc)
+def create_member_fixture(ixp, as_number, speed, date_left = None, member_since = None, asn_country = "CH"):
+    last_active = date_left or datetime.utcnow()
     member_since = member_since or datetime(year=2024, month=4, day=1).date()
     asn = create_asn_fixture(as_number, asn_country)
     member = IXPMember(
