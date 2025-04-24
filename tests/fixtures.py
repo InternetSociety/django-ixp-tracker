@@ -20,8 +20,8 @@ def create_asn_fixture(as_number: int, country: str = "CH"):
     return asn
 
 
-def create_ixp_fixture(peering_db_id: int, country = "MM", last_updated: datetime = None):
-    last_updated = last_updated or datetime.now(timezone.utc)
+def create_ixp_fixture(peering_db_id: int, country = "MM", last_active: datetime = None):
+    last_active = last_active or datetime.now(timezone.utc)
     ixp = IXP(
         name="Old name",
         long_name="Network Name",
@@ -31,8 +31,8 @@ def create_ixp_fixture(peering_db_id: int, country = "MM", last_updated: datetim
         peeringdb_id=peering_db_id,
         country_code=country,
         created=datetime(year=2020,month=10,day=1, tzinfo=timezone.utc),
-        last_updated=last_updated,
-        last_active=datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
+        last_updated=datetime(year=2024, month=4, day=1, tzinfo=timezone.utc),
+        last_active=last_active
     )
     ixp.save()
     return ixp

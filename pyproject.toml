@@ -1,6 +1,6 @@
 [project]
 name = "django-ixp-tracker"
-version = "0.9"
+version = "0.10"
 description = "Library to retrieve and manipulate data about IXPs"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10
+- fixed IXP count in per-country stats
+
 ## 0.9
 - add IXP count to per-country stats (will default to zero for any existing stats so those will need to be re-generated)
 

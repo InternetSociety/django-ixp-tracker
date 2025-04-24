@@ -22,7 +22,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     stats_date = stats_date.replace(day=1)
     # Give IXPs a month's grace to be considered "active" for the purpose of the stats as "last_updated" is only updated when the status is toggled
     ixp_considered_active = (stats_date - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0)
-    ixps = IXP.objects.filter(created__lte=stats_date, last_updated__gte=ixp_considered_active).all()
+    ixps = IXP.objects.filter(created__lte=stats_date, last_active__gte=ixp_considered_active).all()
     all_members = (IXPMember.objects
                    .filter(
                         Q(memberships__start_date__lte=stats_date) &
