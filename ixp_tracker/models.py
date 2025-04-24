@@ -110,6 +110,7 @@ class StatsPerIXP(models.Model):
 class StatsPerCountry(models.Model):
     country_code = models.CharField(max_length=2)
     stats_date = models.DateField()
+    ixp_count = models.IntegerField()
     asn_count = models.IntegerField()
     member_count = models.IntegerField()
     asns_ixp_member_rate = models.FloatField()

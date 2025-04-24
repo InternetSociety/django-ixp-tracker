@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9
+- add IXP count to per-country stats (will default to zero for any existing stats so those will need to be re-generated)
+
 ## 0.8
 - update `last_updated` rather than `last_active` when active status toggled
 

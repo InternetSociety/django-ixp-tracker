@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, TypedDict, Union
 
 from django_countries import countries
@@ -18,9 +18,11 @@ class CountryStats(TypedDict):
 
 
 def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
-    stats_date = stats_date or datetime.utcnow().replace(tzinfo=timezone.utc)
+    stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
-    ixps = IXP.objects.filter(created__lte=stats_date).all()
+    # Give IXPs a month's grace to be considered "active" for the purpose of the stats as "last_updated" is only updated when the status is toggled
+    ixp_considered_active = (stats_date - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0)
+    ixps = IXP.objects.filter(created__lte=stats_date, last_updated__gte=ixp_considered_active).all()
     all_members = (IXPMember.objects
                    .filter(
                         Q(memberships__start_date__lte=stats_date) &
@@ -29,6 +31,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     all_stats_per_country: Dict[str, CountryStats] = {}
     for code, _ in list(countries):
         all_stats_per_country[code] = {
+            "ixp_count": 0,
             "all_asns": None,
             "member_asns": set(),
             "total_capacity": 0
@@ -49,6 +52,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         if country_stats is None:
             logger.warning("Country not found", extra={"country": ixp_country})
             country_stats = {
+                "ixp_count": 0,
                 "all_asns": None,
                 "member_asns": set(),
                 "total_capacity": 0
@@ -56,6 +60,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             all_stats_per_country[ixp_country] = country_stats
         if country_stats.get("all_asns") is None:
             all_stats_per_country[ixp_country]["all_asns"] = geo_lookup.get_asns_for_country(ixp_country, stats_date)
+        all_stats_per_country[ixp_country]["ixp_count"] += 1
         member_asns = [member.asn.number for member in members]
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         StatsPerIXP.objects.update_or_create(
@@ -82,6 +87,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             country_code=code,
             stats_date=stats_date.date(),
             defaults={
+                "ixp_count": country_stats["ixp_count"],
                 "asn_count": len(country_stats["all_asns"]),
                 "member_count": len(country_stats["member_asns"]),
                 "asns_ixp_member_rate": local_asns_members_rate,

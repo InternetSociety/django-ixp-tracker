@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 import pytest
@@ -46,10 +46,28 @@ def test_generates_stats():
     generate_stats(TestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
+    # The default fixture does not have a recent last_active date so technically they shouldn't be counted here
+    assert stats.ixp_count == 2
     assert stats.asn_count == 5
     assert stats.member_count == 3
     assert stats.total_capacity == 26.5
     assert stats.asns_ixp_member_rate == 0.4
+
+
+def test_generates_ixp_counts():
+    # currently_active
+    create_ixp_fixture(123, "CH", datetime.now(timezone.utc))
+    last_month = (datetime.now(timezone.utc).replace(day=1) - timedelta(days=1)).replace(day=1)
+    # active_last_month
+    create_ixp_fixture(124, "CH", last_month)
+    before_last_month = last_month - timedelta(days=1)
+    # not_active_recently
+    create_ixp_fixture(125, "CH", before_last_month)
+
+    generate_stats(TestLookup())
+
+    stats = StatsPerCountry.objects.filter(country_code="CH").first()
+    assert stats.ixp_count == 2
 
 
 def test_handles_invalid_country():
