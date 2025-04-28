@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11
+- ensured inactive IXPs are not counted in per-country stats
+
 ## 0.10
 - fixed IXP count in per-country stats
 

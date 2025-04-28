@@ -55,19 +55,23 @@ def test_generates_stats():
 
 
 def test_generates_ixp_counts():
-    # currently_active
-    create_ixp_fixture(123, "CH", datetime.now(timezone.utc))
-    last_month = (datetime.now(timezone.utc).replace(day=1) - timedelta(days=1)).replace(day=1)
-    # active_last_month
-    create_ixp_fixture(124, "CH", last_month)
-    before_last_month = last_month - timedelta(days=1)
-    # not_active_recently
-    create_ixp_fixture(125, "CH", before_last_month)
+    stats_date = (datetime.now(timezone.utc) - timedelta(weeks=16)).replace(day=1)
+    one_month_before = (stats_date - timedelta(days=1)).replace(day=1)
+    one_month_after = (stats_date - timedelta(days=35)).replace(day=1)
+    # currently_active member
+    active = create_ixp_fixture(123, "CH")
+    create_member_fixture(active, 12345, 500, member_since=one_month_before, date_left=one_month_after)
+    # member active in the past
+    member_in_past = create_ixp_fixture(124, "CH")
+    create_member_fixture(member_in_past, 12345, 500, member_since=one_month_before, date_left=one_month_before)
+    # member not yet active (as we are generating historical stats there could be members in the future)
+    mmeber_in_future = create_ixp_fixture(125, "CH")
+    create_member_fixture(mmeber_in_future, 12345, 500, member_since=one_month_after, date_left=None)
 
     generate_stats(TestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
-    assert stats.ixp_count == 2
+    assert stats.ixp_count == 1
 
 
 def test_handles_invalid_country():
