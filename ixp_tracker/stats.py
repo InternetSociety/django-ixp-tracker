@@ -39,6 +39,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         members = [member for member in all_members if member.ixp == ixp]
         member_count = len(members)
         capacity = 0
+        rs_peers = 0
         for member in members:
             # Make sure we get the relevant membership record for the stats_date
             membership = (IXPMembershipRecord.objects
@@ -46,6 +47,8 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 .filter(Q(end_date=None) | Q(end_date__gte=stats_date))).first()
             if membership is not None:
                 capacity += membership.speed
+                if membership.is_rs_peer:
+                    rs_peers += 1
         ixp_country = ixp.country_code
         country_stats = all_stats_per_country.get(ixp_country)
         if country_stats is None:
@@ -63,6 +66,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             all_stats_per_country[ixp_country]["ixp_count"] += 1
         member_asns = [member.asn.number for member in members]
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
+        rs_peering_rate = rs_peers / member_count if rs_peers else 0
         StatsPerIXP.objects.update_or_create(
             ixp=ixp,
             stats_date=stats_date.date(),
@@ -72,6 +76,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "members": member_count,
                 "capacity": (capacity/1000),
                 "local_asns_members_rate": local_asns_members_rate,
+                "rs_peering_rate": rs_peering_rate,
             }
         )
         # We only count unique ASNs that are members of an IXP in a country
@@ -96,7 +101,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         )
 
 
-def calculate_local_asns_members_rate(member_asns: List[int], country_asns: [int]) -> float:
+def calculate_local_asns_members_rate(member_asns: List[int], country_asns: List[int]) -> float:
     if len(country_asns) == 0:
         return 0
     # Ignore the current country for a member ASN (as that might have changed) but just get all current members

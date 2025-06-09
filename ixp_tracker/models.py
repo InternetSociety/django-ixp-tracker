@@ -96,6 +96,7 @@ class StatsPerIXP(models.Model):
     capacity = models.FloatField()
     members = models.IntegerField()
     local_asns_members_rate = models.FloatField()
+    rs_peering_rate = models.FloatField(default=None)
 
     def __str__(self):
         return f"{self.ixp.name} - {self.stats_date}"

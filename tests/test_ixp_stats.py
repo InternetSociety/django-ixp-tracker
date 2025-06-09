@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 import pytest
@@ -10,6 +10,7 @@ from tests.test_members_import import create_asn_fixture, create_ixp_fixture
 pytestmark = pytest.mark.django_db
 
 class TestLookup:
+    __test__ = False
 
     def __init__(self, default_status: str = "assigned"):
         self.default_status = default_status
@@ -31,9 +32,9 @@ def test_with_no_data_generates_no_stats():
     assert len(stats) == 0
 
 
-def test_generates_capacity_and_member_count():
+def test_generates_capacity_rs_peering_and_member_count():
     ixp = create_ixp_fixture(123)
-    create_member_fixture(ixp, 12345, 500)
+    create_member_fixture(ixp, 12345, 500, True)
     create_member_fixture(ixp, 67890, 10000)
 
     generate_stats(TestLookup())
@@ -43,12 +44,13 @@ def test_generates_capacity_and_member_count():
     ixp_stats = stats.first()
     assert ixp_stats.members == 2
     assert ixp_stats.capacity == 10.5
+    assert ixp_stats.rs_peering_rate == 0.5
 
 
 def test_generates_stats_for_first_of_month():
     create_ixp_fixture(123)
 
-    generate_stats(TestLookup(), datetime(year=2024, month=2, day=10))
+    generate_stats(TestLookup(), datetime(year=2024, month=2, day=10, tzinfo=timezone.utc))
 
     stats = StatsPerIXP.objects.all()
     assert len(stats) == 1
@@ -59,18 +61,19 @@ def test_generates_stats_for_first_of_month():
 def test_does_not_count_members_marked_as_left():
     ixp = create_ixp_fixture(123)
     create_member_fixture(ixp, 12345, 500)
-    create_member_fixture(ixp, 67890, 10000, datetime(year=2024, month=4, day=1).date())
+    create_member_fixture(ixp, 67890, 10000, True, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
 
     generate_stats(TestLookup())
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
     assert ixp_stats.capacity == 0.5
+    assert ixp_stats.rs_peering_rate == 0
 
 
 def test_does_not_count_member_twice_if_they_rejoin():
     ixp = create_ixp_fixture(123)
-    member = create_member_fixture(ixp, 67890, 10000, datetime(year=2024, month=4, day=1).date())
+    member = create_member_fixture(ixp, 67890, 10000, False, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
     membership = IXPMembershipRecord(
         member=member,
         start_date=datetime(year=2024, month=5, day=1),
@@ -88,24 +91,25 @@ def test_does_not_count_member_twice_if_they_rejoin():
 
 def test_does_not_count_members_not_yet_created():
     ixp = create_ixp_fixture(123)
-    create_member_fixture(ixp, 12345, 500, member_since=datetime(year=2024, month=1, day=1).date())
-    create_member_fixture(ixp, 67890, 10000, member_since=datetime(year=2024, month=4, day=1).date())
+    create_member_fixture(ixp, 12345, 500, True, member_since=datetime(year=2024, month=1, day=1).date())
+    create_member_fixture(ixp, 67890, 10000, False, member_since=datetime(year=2024, month=4, day=1).date())
 
-    generate_stats(TestLookup(), datetime(year=2024, month=2, day=1))
+    generate_stats(TestLookup(), datetime(year=2024, month=2, day=1, tzinfo=timezone.utc))
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
     assert ixp_stats.capacity == 0.5
+    assert ixp_stats.rs_peering_rate == 1
 
 
 def test_does_not_count_ixps_not_yet_created():
     ixp = create_ixp_fixture(123)
-    ixp.created = datetime(year=2024, month=4, day=1)
+    ixp.created = datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
     ixp.save()
     create_member_fixture(ixp, 12345, 500)
     create_member_fixture(ixp, 67890, 10000)
 
-    generate_stats(TestLookup(), datetime(year=2024, month=2, day=1))
+    generate_stats(TestLookup(), datetime(year=2024, month=2, day=1, tzinfo=timezone.utc))
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats is None
@@ -143,21 +147,21 @@ def test_calculate_local_asns_members_rate_ignores_members_not_in_country_list()
     assert rate == 0.25
 
 
-def create_member_fixture(ixp, as_number, speed, date_left = None, member_since = None, asn_country = "CH"):
-    last_active = date_left or datetime.utcnow()
+def create_member_fixture(ixp, as_number, speed, is_rs_peer = False, date_left = None, member_since = None, asn_country = "CH"):
+    last_active = date_left or datetime.now(timezone.utc)
     member_since = member_since or datetime(year=2024, month=4, day=1).date()
     asn = create_asn_fixture(as_number, asn_country)
     member = IXPMember(
         ixp=ixp,
         asn=asn,
-        last_updated=datetime.utcnow(),
+        last_updated=datetime.now(timezone.utc),
         last_active=last_active
     )
     member.save()
     membership = IXPMembershipRecord(
         member=member,
         start_date=member_since,
-        is_rs_peer=False,
+        is_rs_peer=is_rs_peer,
         speed=speed,
         end_date=date_left
     )
