@@ -13,8 +13,8 @@ def create_asn_fixture(as_number: int, country: str = "CH"):
         peeringdb_id=5,
         network_type="other",
         registration_country_code=country,
-        created="2019-01-01",
-        last_updated="2024-05-01"
+        created=datetime(year=2019, month=1, day=1, tzinfo=timezone.utc),
+        last_updated=datetime(year=2024, month=5, day=1, tzinfo=timezone.utc),
     )
     asn.save()
     return asn

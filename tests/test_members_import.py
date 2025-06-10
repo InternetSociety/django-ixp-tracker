@@ -46,9 +46,10 @@ multiple_member_data = [
     }
 ]
 
-date_now = datetime.utcnow().replace(tzinfo=timezone.utc)
+date_now = datetime.now(timezone.utc)
 
 class TestLookup(ASNGeoLookup):
+    __test__ = False
 
     def __init__(self, default_status: str = "assigned"):
         self.default_status = default_status
@@ -57,7 +58,7 @@ class TestLookup(ASNGeoLookup):
         pass
 
     def get_status(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.utcnow().replace(tzinfo=timezone.utc)
+        assert as_at <= datetime.now(timezone.utc)
         assert asn > 0
         return self.default_status
 
@@ -110,7 +111,7 @@ def test_updates_existing_member():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
 
@@ -130,7 +131,7 @@ def test_updates_membership_for_existing_member():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -158,13 +159,13 @@ def test_adds_new_membership_for_existing_member_marked_as_left():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
         member=member,
         start_date=datetime(year=2018, month=1, day=3).date(),
-        end_date=datetime(year=2018, month=7, day=13),
+        end_date=datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
         is_rs_peer=False,
         speed=500
     )
@@ -187,13 +188,13 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
         member=member,
         start_date=datetime(year=2018, month=1, day=3).date(),
-        end_date=datetime(year=2018, month=7, day=13),
+        end_date=datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
         is_rs_peer=False,
         speed=500
     )
@@ -214,7 +215,7 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
 def test_marks_member_as_left_that_is_no_longer_active():
     asn = create_asn_fixture(dummy_member_data["asn"])
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     last_day_of_last_month = (first_day_of_month - timedelta(days=1))
     member = IXPMember(
         ixp=ixp,
@@ -247,7 +248,7 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -270,13 +271,13 @@ def test_does_not_mark_member_as_left_if_asn_is_assigned():
 def test_marks_member_as_left_if_asn_is_not_assigned():
     asn = create_asn_fixture(dummy_member_data["asn"], "ZZ")
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     last_day_of_last_month = (first_day_of_month - timedelta(days=1))
     member = IXPMember(
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -299,12 +300,12 @@ def test_marks_member_as_left_if_asn_is_not_assigned():
 def test_does_not_mark_as_left_before_joining_date():
     asn = create_asn_fixture(dummy_member_data["asn"], "ZZ")
     ixp = create_ixp_fixture(dummy_member_data["ix_id"])
-    first_day_of_month = datetime.utcnow().replace(day=1)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
     member = IXPMember(
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime.utcnow()
+        last_active=datetime.now(timezone.utc)
     )
     member.save()
     membership = IXPMembershipRecord(
@@ -329,17 +330,17 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
     # As we always create a new membership record if the most recent one has ended, for multiple ASN-IX combos this
     # could result in multiple new memberships being created
     membership = IXPMembershipRecord(
         member=member,
-        start_date=datetime(year=2023, month=1, day=13),
+        start_date=datetime(year=2023, month=1, day=13, tzinfo=timezone.utc),
         is_rs_peer=False,
         speed=500,
-        end_date=datetime(year=2023, month=7, day=13)
+        end_date=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     membership.save()
 
@@ -359,7 +360,7 @@ def test_do_not_add_new_membership_for_same_created_date():
         ixp=ixp,
         asn=asn,
         last_updated=dummy_member_data["updated"],
-        last_active=datetime(year=2023, month=7, day=13)
+        last_active=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     member.save()
     # As we always create a new membership record if the most recent one has ended, for multiple ASN-IX combos this
@@ -369,7 +370,7 @@ def test_do_not_add_new_membership_for_same_created_date():
         start_date=dateutil.parser.isoparse(dummy_member_data["created"]).date(),
         is_rs_peer=False,
         speed=500,
-        end_date=datetime(year=2023, month=7, day=13)
+        end_date=datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)
     )
     membership.save()
 
