@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13
+- make rs_peer_rate field nullable to allow for pre-existing data
+
 ## 0.12
 - add rs_peer_rate to the per-IXP stats (existing stats will need to be re-generated)
 
