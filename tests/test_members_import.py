@@ -46,7 +46,7 @@ multiple_member_data = [
     }
 ]
 
-date_now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+date_now = datetime.now(timezone.utc)
 
 class TestLookup(ASNGeoLookup):
     __test__ = False
@@ -58,7 +58,7 @@ class TestLookup(ASNGeoLookup):
         pass
 
     def get_status(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+        assert as_at <= datetime.now(timezone.utc)
         assert asn > 0
         return self.default_status
 
