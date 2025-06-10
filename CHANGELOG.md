@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.12
+- add rs_peer_rate to the per-IXP stats (existing stats will need to be re-generated)
+
 ## 0.11
 - ensured inactive IXPs are not counted in per-country stats
 
