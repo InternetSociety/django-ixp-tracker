@@ -11,7 +11,7 @@ from tests.test_members_import import create_ixp_fixture
 pytestmark = pytest.mark.django_db
 
 
-class GeoTestLookup:
+class TestLookup:
 
     def __init__(self, default_status: str = "assigned"):
         self.default_status = default_status
@@ -30,7 +30,7 @@ class GeoTestLookup:
 
 
 def test_with_no_data_generates_no_stats():
-    generate_stats(GeoTestLookup())
+    generate_stats(TestLookup())
 
     stats = StatsPerCountry.objects.all()
     assert len(stats) == 249
@@ -46,7 +46,7 @@ def test_generates_stats():
     create_member_fixture(ixp_two, 5050, 6000)
     create_member_fixture(ixp_two, 67890, 10000)
 
-    generate_stats(GeoTestLookup())
+    generate_stats(TestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
     # The default fixture does not have a recent last_active date so technically they shouldn't be counted here
@@ -73,7 +73,7 @@ def test_generates_ixp_counts():
     mmeber_in_future = create_ixp_fixture(125, "CH")
     create_member_fixture(mmeber_in_future, 12345, 500, member_since=one_month_after, date_left=None)
 
-    generate_stats(GeoTestLookup())
+    generate_stats(TestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
     assert stats.ixp_count == 1
@@ -82,7 +82,7 @@ def test_generates_ixp_counts():
 def test_handles_invalid_country():
     create_ixp_fixture(123, "XK")
 
-    generate_stats(GeoTestLookup())
+    generate_stats(TestLookup())
 
     country_stats = StatsPerCountry.objects.filter(country_code="XK").first()
     assert country_stats is None
