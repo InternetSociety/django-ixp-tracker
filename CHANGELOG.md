@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14
+- add local_routed_asns_members_rate to per-IXP stats
+- add routed_asns_ixp_member_rate and routed_asn_count to per-country stats
+
 ## 0.13
 - make rs_peer_rate field nullable to allow for pre-existing data
 
