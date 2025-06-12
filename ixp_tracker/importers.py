@@ -27,6 +27,9 @@ class ASNGeoLookup(Protocol):
     def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         pass
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        pass
+
 
 def import_data(
         geo_lookup: ASNGeoLookup,
@@ -35,7 +38,7 @@ def import_data(
         page_limit: int = 200
 ):
     if processing_date is None:
-        processing_date = datetime.utcnow().replace(tzinfo=timezone.utc)
+        processing_date = datetime.now(timezone.utc)
         import_ixps(processing_date)
         logger.debug("Imported IXPs")
         import_asns(geo_lookup, reset, page_limit)

@@ -25,6 +25,9 @@ class TestLookup:
     def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         return [12345, 446, 789, 5050, 54321]
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        return [12345, 446, 789, 54321]
+
 
 def test_with_no_data_generates_no_stats():
     generate_stats(TestLookup())
@@ -49,9 +52,11 @@ def test_generates_stats():
     # The default fixture does not have a recent last_active date so technically they shouldn't be counted here
     assert stats.ixp_count == 2
     assert stats.asn_count == 5
+    assert stats.routed_asn_count == 4
     assert stats.member_count == 3
     assert stats.total_capacity == 26.5
     assert stats.asns_ixp_member_rate == 0.4
+    assert stats.routed_asns_ixp_member_rate == 0.25
 
 
 def test_generates_ixp_counts():

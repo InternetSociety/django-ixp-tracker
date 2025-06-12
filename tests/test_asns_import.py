@@ -23,7 +23,7 @@ dummy_asn_data = {
 class TestLookup:
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.utcnow().replace(tzinfo=timezone.utc)
+        assert as_at <= datetime.now(timezone.utc)
         assert asn > 0
         return "AU"
 
@@ -66,8 +66,8 @@ def test_updates_existing_data():
         peeringdb_id=dummy_asn_data["id"],
         network_type="other",
         registration_country_code="CH",
-        created="2019-01-01",
-        last_updated="2024-05-01"
+        created=datetime(2019, 1, 1).replace(tzinfo=timezone.utc),
+        last_updated=datetime(2024, 5, 1).replace(tzinfo=timezone.utc)
     )
     asn.save()
     with responses.RequestsMock() as rsps:

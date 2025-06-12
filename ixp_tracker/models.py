@@ -96,6 +96,7 @@ class StatsPerIXP(models.Model):
     capacity = models.FloatField()
     members = models.IntegerField()
     local_asns_members_rate = models.FloatField()
+    local_routed_asns_members_rate = models.FloatField(default=None, null=True)
     rs_peering_rate = models.FloatField(default=None, null=True)
 
     def __str__(self):
@@ -113,8 +114,10 @@ class StatsPerCountry(models.Model):
     stats_date = models.DateField()
     ixp_count = models.IntegerField()
     asn_count = models.IntegerField()
+    routed_asn_count = models.IntegerField(default=None, null=True)
     member_count = models.IntegerField()
     asns_ixp_member_rate = models.FloatField()
+    routed_asns_ixp_member_rate = models.FloatField(default=None, null=True)
     total_capacity = models.FloatField()
 
     def __str__(self):
