@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 import pytest
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_with_no_data_returned_does_nothing():
-    backfill_date = datetime(year=2024, month=1, day=1)
+    backfill_date = datetime(year=2024, month=1, day=1).replace(tzinfo=timezone.utc)
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
@@ -33,7 +33,7 @@ def test_with_no_data_returned_does_nothing():
 
 
 def test_handles_malformed_archives():
-    backfill_date = datetime(year=2024, month=1, day=1)
+    backfill_date = datetime(year=2024, month=1, day=1).replace(tzinfo=timezone.utc)
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
@@ -52,7 +52,7 @@ def test_handles_malformed_archives():
 
 
 def test_handles_single_quoted_json():
-    backfill_date = datetime(year=2024, month=1, day=1)
+    backfill_date = datetime(year=2024, month=1, day=1).replace(tzinfo=timezone.utc)
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
@@ -92,7 +92,7 @@ def test_queries_for_every_day_of_month():
 
 
 def test_adds_all_data():
-    backfill_date = datetime(year=2024, month=1, day=1)
+    backfill_date = datetime(year=2024, month=1, day=1).replace(tzinfo=timezone.utc)
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),

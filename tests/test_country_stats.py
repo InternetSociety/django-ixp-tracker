@@ -56,6 +56,7 @@ def test_generates_stats():
     assert stats.member_count == 3
     assert stats.total_capacity == 26.5
     assert stats.asns_ixp_member_rate == 0.4
+    assert stats.routed_asns_ixp_member_rate == 0.25
 
 
 def test_generates_ixp_counts():
@@ -72,7 +73,7 @@ def test_generates_ixp_counts():
     mmeber_in_future = create_ixp_fixture(125, "CH")
     create_member_fixture(mmeber_in_future, 12345, 500, member_since=one_month_after, date_left=None)
 
-    generate_stats(TestLookup())
+    generate_stats(GeoTestLookup())
 
     stats = StatsPerCountry.objects.filter(country_code="CH").first()
     assert stats.ixp_count == 1

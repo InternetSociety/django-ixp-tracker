@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -20,14 +20,14 @@ dummy_ixp_data = {
 
 
 def test_with_no_data_does_nothing():
-    importers.process_ixp_data(datetime.utcnow())([])
+    importers.process_ixp_data(datetime.now(timezone.utc))([])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
 
 
 def test_imports_a_new_ixp():
-    importers.process_ixp_data(datetime.utcnow())([dummy_ixp_data])
+    importers.process_ixp_data(datetime.now(timezone.utc))([dummy_ixp_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1
@@ -44,21 +44,21 @@ def test_updates_an_existing_ixp():
         country_code=dummy_ixp_data["country"],
         created=dummy_ixp_data["created"],
         last_updated=dummy_ixp_data["updated"],
-        last_active=datetime(year=2024, month=4, day=1)
+        last_active=datetime(year=2024, month=4, day=1).replace(tzinfo=timezone.utc)
     )
     ixp.save()
 
-    importers.process_ixp_data(datetime.utcnow())([dummy_ixp_data])
+    importers.process_ixp_data(datetime.now(timezone.utc))([dummy_ixp_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1
-    assert ixps.first().last_active.date() == datetime.utcnow().date()
+    assert ixps.first().last_active.date() == datetime.now(timezone.utc).date()
     assert ixps.first().name == dummy_ixp_data["name"]
 
 
 def test_does_not_import_an_ixp_from_a_non_iso_country():
     dummy_ixp_data["country"] = "XK"  # XK is Kosovo, but it's not an official ISO code
-    importers.process_ixp_data(datetime.utcnow())([dummy_ixp_data])
+    importers.process_ixp_data(datetime.now(timezone.utc))([dummy_ixp_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -68,7 +68,7 @@ def test_handles_errors_with_source_data():
     data_with_problems = dummy_ixp_data
     data_with_problems["created"] = "abc"
 
-    importers.process_ixp_data(datetime.utcnow())([data_with_problems])
+    importers.process_ixp_data(datetime.now(timezone.utc))([data_with_problems])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0

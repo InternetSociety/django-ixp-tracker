@@ -24,6 +24,9 @@ class TestLookup:
     def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
         return [12345, 446, 789, 5050, 54321]
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
+        return [12345, 446, 789]
+
 
 def test_with_no_data_generates_no_stats():
     generate_stats(TestLookup())
@@ -129,6 +132,20 @@ def test_saves_local_asns_members_rate():
     assert ixp_stats.local_asns_members_rate == 0.2
 
 
+def test_saves_local_routed_asns_members_rate():
+    ixp_one = create_ixp_fixture(123, "CH")
+    create_member_fixture(ixp_one, 12345, 500, asn_country="CH")
+    create_member_fixture(ixp_one, 67890, 10000, asn_country="CH")
+    ixp_two = create_ixp_fixture(456, "CH")
+    create_member_fixture(ixp_two, 54321, 500, asn_country="CH")
+    create_member_fixture(ixp_two, 9876, 10000, asn_country="CH")
+
+    generate_stats(TestLookup())
+
+    ixp_stats = StatsPerIXP.objects.all().first()
+    assert pytest.approx(ixp_stats.local_routed_asns_members_rate, 0.01) == 0.33
+
+
 def test_calculate_local_asns_members_rate_returns_zero_if_no_asns_in_country():
     rate = calculate_local_asns_members_rate([12345], [])
 
@@ -147,8 +164,8 @@ def test_calculate_local_asns_members_rate_ignores_members_not_in_country_list()
     assert rate == 0.25
 
 
-def create_member_fixture(ixp, as_number, speed, date_left = None, member_since = None, asn_country = "CH"):
-    last_active = date_left or datetime.utcnow()
+def create_member_fixture(ixp, as_number, speed, is_rs_peer = False, date_left = None, member_since = None, asn_country = "CH"):
+    last_active = date_left or datetime.now(timezone.utc)
     member_since = member_since or datetime(year=2024, month=4, day=1).date()
     asn = create_asn_fixture(as_number, asn_country)
     member = IXPMember(
