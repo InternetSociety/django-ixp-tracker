@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15
+- change definition of active status for an IXP from at least 1 member to at least 3 members
+
 ## 0.14
 - add local_routed_asns_members_rate to per-IXP stats
 - add routed_asns_ixp_member_rate and routed_asn_count to per-country stats

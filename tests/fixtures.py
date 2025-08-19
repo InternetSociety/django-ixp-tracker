@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from ixp_tracker.models import ASN, IXP
+from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord
 
 
 def create_asn_fixture(as_number: int, country: str = "CH"):
@@ -36,3 +36,25 @@ def create_ixp_fixture(peering_db_id: int, country = "MM", last_active: datetime
     )
     ixp.save()
     return ixp
+
+
+def create_member_fixture(ixp, as_number, speed = 10000, is_rs_peer = False, date_left = None, member_since = None, asn_country = "CH"):
+    last_active = date_left or datetime.now(timezone.utc)
+    member_since = member_since or datetime(year=2024, month=4, day=1).date()
+    asn = create_asn_fixture(as_number, asn_country)
+    member = IXPMember(
+        ixp=ixp,
+        asn=asn,
+        last_updated=datetime.now(timezone.utc),
+        last_active=last_active
+    )
+    member.save()
+    membership = IXPMembershipRecord(
+        member=member,
+        start_date=member_since,
+        is_rs_peer=is_rs_peer,
+        speed=speed,
+        end_date=date_left
+    )
+    membership.save()
+    return member

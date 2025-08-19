@@ -5,13 +5,14 @@ from typing import Dict, List, TypedDict, Union
 from django_countries import countries
 from django.db.models import Q
 
-from ixp_tracker.importers import ASNGeoLookup
+from ixp_tracker.importers import ASNGeoLookup, is_ixp_active
 from ixp_tracker.models import IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 logger = logging.getLogger("ixp_tracker")
 
 
 class CountryStats(TypedDict):
+    ixp_count: int
     all_asns: Union[List[int], None]
     routed_asns: Union[List[int], None]
     member_asns: set
@@ -65,14 +66,13 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             all_stats_per_country[ixp_country] = country_stats
         if country_stats.get("all_asns") is None:
             all_stats_per_country[ixp_country]["all_asns"] = geo_lookup.get_asns_for_country(ixp_country, stats_date)
-        if member_count > 0:
-            all_stats_per_country[ixp_country]["ixp_count"] += 1
         if country_stats.get("routed_asns") is None:
             all_stats_per_country[ixp_country]["routed_asns"] = geo_lookup.get_routed_asns_for_country(ixp_country, stats_date)
         member_asns = [member.asn.number for member in members]
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
+        # We always save the stats per IXP so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         StatsPerIXP.objects.update_or_create(
             ixp=ixp,
             stats_date=stats_date.date(),
@@ -86,10 +86,13 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "rs_peering_rate": rs_peering_rate,
             }
         )
-        # We only count unique ASNs that are members of an IXP in a country
-        all_stats_per_country[ixp_country]["member_asns"] |= set(member_asns)
-        # But we count capacity for all members, i.e. an ASN member at 2 IXPs will have capacity at each included in the sum
-        all_stats_per_country[ixp_country]["total_capacity"] += capacity
+        # Only aggregate this IXP's stats into the country stats if it's active
+        if is_ixp_active(members):
+            all_stats_per_country[ixp_country]["ixp_count"] += 1
+            # We only count unique ASNs that are members of an IXP in a country
+            all_stats_per_country[ixp_country]["member_asns"] |= set(member_asns)
+            # But we count capacity for all members, i.e. an ASN member at 2 IXPs will have capacity at each included in the sum
+            all_stats_per_country[ixp_country]["total_capacity"] += capacity
     for code, _ in list(countries):
         country_stats = all_stats_per_country[code]
         if country_stats.get("all_asns") is None:
