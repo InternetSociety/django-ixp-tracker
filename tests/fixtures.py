@@ -62,16 +62,22 @@ def create_member_fixture_deprecated(ixp, as_number, speed = 10000, is_rs_peer =
     return member
 
 
-def create_member_fixture(ixp, asn = None, date_left = None, member_since = None, quantity = 1):
+def create_member_fixture(ixp, asn = None, date_left = None, member_since = None, quantity = 1, speed = None, is_rs_peer = None):
     created = 0
     member = None
+    membership_properties = {}
+    if member_since is not None:
+        membership_properties["start_date"] = member_since
+    if date_left is not None:
+        membership_properties["end_date"] = date_left
+    if speed is not None:
+        membership_properties["speed"] = speed
+    if is_rs_peer is not None:
+        membership_properties["is_rs_peer"] = is_rs_peer
     while created < quantity:
         member_asn = asn or ASNFactory()
         member = IXPMemberFactory(ixp=ixp, asn=member_asn)
-        if date_left and member_since:
-            IXPMembershipRecordFactory(member=member, start_date=member_since, end_date=date_left)
-        else:
-            IXPMembershipRecordFactory(member=member)
+        IXPMembershipRecordFactory(member=member, **membership_properties)
         created += 1
     return member
 
