@@ -10,6 +10,8 @@ from ixp_tracker.importers import import_data
 from ixp_tracker.management.commands.ixp_tracker_import import DefaultASNGeoLookup
 from ixp_tracker.models import ASN, IXP, IXPMember
 
+from .fixtures import PeeringASNFactory, PeeringIXFactory, PeeringNetIXLANFactory
+
 pytestmark = pytest.mark.django_db
 
 
@@ -93,56 +95,16 @@ def test_queries_for_every_day_of_month():
 
 def test_adds_all_data():
     backfill_date = datetime(year=2024, month=1, day=1).replace(tzinfo=timezone.utc)
+    asn_data = PeeringASNFactory()
+    ix_data = PeeringIXFactory()
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
             body=json.dumps(
                 {
-                    "ix":
-                        {
-                            "data":
-                                [
-                                    {
-                                        "id": 1,
-                                        "name": "City IX",
-                                        "name_long": "City Internet Exchange Point",
-                                        "city": "City",
-                                        "country": "AF",
-                                        "website": "http://example.com",
-                                        "created": "2019-08-24T14:15:22Z",
-                                        "updated": "2019-08-24T14:15:22Z",
-                                    }
-                                ]
-                        },
-                    "net":
-                        {
-                            "data":
-                                [
-                                    {
-                                        "id": 3,
-                                        "asn": 6543,
-                                        "name": "New ASN",
-                                        "info_type": "non-profit",
-                                        "created": "2019-08-24T14:15:22Z",
-                                        "updated": "2019-08-24T14:15:22Z",
-                                    }
-
-                                ]
-                        },
-                    "netixlan":
-                        {
-                            "data":
-                                [
-                                    {
-                                        "asn": 6543,
-                                        "ix_id": 1,
-                                        "created": "2019-08-24T14:15:22Z",
-                                        "updated": "2019-08-24T14:15:22Z",
-                                        "is_rs_peer": True,
-                                        "speed": 10000,
-                                    }
-                                ]
-                        }
+                    "ix": {"data": [ix_data]},
+                    "net": {"data": [asn_data]},
+                    "netixlan": {"data": [PeeringNetIXLANFactory(asn=asn_data["asn"], ix_id=ix_data["id"])]}
                 }
             ),
         )
