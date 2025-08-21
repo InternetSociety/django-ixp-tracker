@@ -5,7 +5,7 @@ import pytest
 
 from ixp_tracker.models import IXPMembershipRecord, StatsPerIXP
 from ixp_tracker.stats import calculate_local_asns_members_rate, generate_stats
-from tests.fixtures import create_member_fixture
+from tests.fixtures import create_member_fixture_deprecated
 from tests.test_members_import import create_ixp_fixture
 
 pytestmark = pytest.mark.django_db
@@ -38,8 +38,8 @@ def test_with_no_data_generates_no_stats():
 
 def test_generates_capacity_rs_peering_and_member_count():
     ixp = create_ixp_fixture(123)
-    create_member_fixture(ixp, 12345, 500, True)
-    create_member_fixture(ixp, 67890, 10000)
+    create_member_fixture_deprecated(ixp, 12345, 500, True)
+    create_member_fixture_deprecated(ixp, 67890, 10000)
 
     generate_stats(MockLookup())
 
@@ -64,8 +64,8 @@ def test_generates_stats_for_first_of_month():
 
 def test_does_not_count_members_marked_as_left():
     ixp = create_ixp_fixture(123)
-    create_member_fixture(ixp, 12345, 500)
-    create_member_fixture(ixp, 67890, 10000, True, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
+    create_member_fixture_deprecated(ixp, 12345, 500)
+    create_member_fixture_deprecated(ixp, 67890, 10000, True, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
 
     generate_stats(MockLookup())
 
@@ -77,7 +77,7 @@ def test_does_not_count_members_marked_as_left():
 
 def test_does_not_count_member_twice_if_they_rejoin():
     ixp = create_ixp_fixture(123)
-    member = create_member_fixture(ixp, 67890, 10000, False, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
+    member = create_member_fixture_deprecated(ixp, 67890, 10000, False, datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
     membership = IXPMembershipRecord(
         member=member,
         start_date=datetime(year=2024, month=5, day=1),
@@ -95,8 +95,8 @@ def test_does_not_count_member_twice_if_they_rejoin():
 
 def test_does_not_count_members_not_yet_created():
     ixp = create_ixp_fixture(123)
-    create_member_fixture(ixp, 12345, 500, True, member_since=datetime(year=2024, month=1, day=1).date())
-    create_member_fixture(ixp, 67890, 10000, False, member_since=datetime(year=2024, month=4, day=1).date())
+    create_member_fixture_deprecated(ixp, 12345, 500, True, member_since=datetime(year=2024, month=1, day=1).date())
+    create_member_fixture_deprecated(ixp, 67890, 10000, False, member_since=datetime(year=2024, month=4, day=1).date())
 
     generate_stats(MockLookup(), datetime(year=2024, month=2, day=1, tzinfo=timezone.utc))
 
@@ -110,8 +110,8 @@ def test_does_not_count_ixps_not_yet_created():
     ixp = create_ixp_fixture(123)
     ixp.created = datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
     ixp.save()
-    create_member_fixture(ixp, 12345, 500)
-    create_member_fixture(ixp, 67890, 10000)
+    create_member_fixture_deprecated(ixp, 12345, 500)
+    create_member_fixture_deprecated(ixp, 67890, 10000)
 
     generate_stats(MockLookup(), datetime(year=2024, month=2, day=1, tzinfo=timezone.utc))
 
@@ -121,11 +121,11 @@ def test_does_not_count_ixps_not_yet_created():
 
 def test_saves_local_asns_members_rate():
     ixp_one = create_ixp_fixture(123, "CH")
-    create_member_fixture(ixp_one, 12345, 500, asn_country="CH")
-    create_member_fixture(ixp_one, 67890, 10000, asn_country="CH")
+    create_member_fixture_deprecated(ixp_one, 12345, 500, asn_country="CH")
+    create_member_fixture_deprecated(ixp_one, 67890, 10000, asn_country="CH")
     ixp_two = create_ixp_fixture(456, "CH")
-    create_member_fixture(ixp_two, 54321, 500, asn_country="CH")
-    create_member_fixture(ixp_two, 9876, 10000, asn_country="CH")
+    create_member_fixture_deprecated(ixp_two, 54321, 500, asn_country="CH")
+    create_member_fixture_deprecated(ixp_two, 9876, 10000, asn_country="CH")
 
     generate_stats(MockLookup())
 
@@ -135,11 +135,11 @@ def test_saves_local_asns_members_rate():
 
 def test_saves_local_routed_asns_members_rate():
     ixp_one = create_ixp_fixture(123, "CH")
-    create_member_fixture(ixp_one, 12345, 500, asn_country="CH")
-    create_member_fixture(ixp_one, 67890, 10000, asn_country="CH")
+    create_member_fixture_deprecated(ixp_one, 12345, 500, asn_country="CH")
+    create_member_fixture_deprecated(ixp_one, 67890, 10000, asn_country="CH")
     ixp_two = create_ixp_fixture(456, "CH")
-    create_member_fixture(ixp_two, 54321, 500, asn_country="CH")
-    create_member_fixture(ixp_two, 9876, 10000, asn_country="CH")
+    create_member_fixture_deprecated(ixp_two, 54321, 500, asn_country="CH")
+    create_member_fixture_deprecated(ixp_two, 9876, 10000, asn_country="CH")
 
     generate_stats(MockLookup())
 

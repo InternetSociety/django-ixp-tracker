@@ -40,7 +40,7 @@ def create_ixp_fixture(peering_db_id: int, country = "MM", last_active: datetime
     return ixp
 
 
-def create_member_fixture(ixp, as_number, speed = 10000, is_rs_peer = False, date_left = None, member_since = None, asn_country = "CH"):
+def create_member_fixture_deprecated(ixp, as_number, speed = 10000, is_rs_peer = False, date_left = None, member_since = None, asn_country ="CH"):
     last_active = date_left or datetime.now(timezone.utc)
     member_since = member_since or datetime(year=2024, month=4, day=1).date()
     asn = create_asn_fixture(as_number, asn_country)
@@ -62,6 +62,20 @@ def create_member_fixture(ixp, as_number, speed = 10000, is_rs_peer = False, dat
     return member
 
 
+def create_member_fixture(ixp, asn = None, date_left = None, member_since = None, quantity = 1):
+    created = 0
+    member = None
+    while created < quantity:
+        member_asn = asn or ASNFactory()
+        member = IXPMemberFactory(ixp=ixp, asn=member_asn)
+        if date_left and member_since:
+            IXPMembershipRecordFactory(member=member, start_date=member_since, end_date=date_left)
+        else:
+            IXPMembershipRecordFactory(member=member)
+        created += 1
+    return member
+
+
 class ASNFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ASN
@@ -73,6 +87,43 @@ class ASNFactory(factory.django.DjangoModelFactory):
     registration_country_code = factory.Faker("country_code")
     created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
     last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class IXPFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = IXP
+
+    name = factory.LazyAttribute(lambda obj: f"{obj.city} - IX")
+    long_name = factory.LazyAttribute(lambda obj: f"{obj.city} Internet Exchange Point")
+    city = factory.Faker("city")
+    website = factory.Faker("url", schemes=["https"])
+    active_status = factory.Faker("pybool")
+    peeringdb_id = factory.Faker("random_number", digits=3)
+    country_code = factory.Faker("country_code")
+    created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    last_active = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class IXPMemberFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = IXPMember
+
+    ixp = None
+    asn = None
+    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    last_active = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class IXPMembershipRecordFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = IXPMembershipRecord
+
+    member = None
+    start_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    is_rs_peer = factory.Faker("pybool")
+    speed = factory.Faker("random_number", digits=6)
+    end_date = None
 
 
 class PeeringASNFactory(factory.DictFactory):
