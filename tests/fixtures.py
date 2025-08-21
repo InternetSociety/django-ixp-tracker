@@ -87,3 +87,33 @@ class PeeringASNFactory(factory.DictFactory):
     class Params:
         created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
         updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class PeeringIXFactory(factory.DictFactory):
+    id = factory.Faker("random_number", digits=3)
+    name = factory.LazyAttribute(lambda obj: f"{obj.city} - IX")
+    name_long = factory.LazyAttribute(lambda obj: f"{obj.city} Internet Exchange Point")
+    city = factory.Faker("city")
+    country = factory.Faker("country_code")
+    website = factory.Faker("url", schemes=["https"])
+    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+    class Params:
+        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class PeeringNetIXLANFactory(factory.DictFactory):
+    asn = factory.Faker("random_number", digits=5)
+    ix_id = factory.Faker("random_number", digits=3)
+    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    is_rs_peer = factory.Faker("pybool")
+    speed = factory.Faker("random_number", digits=6)
+
+
+    class Params:
+        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
