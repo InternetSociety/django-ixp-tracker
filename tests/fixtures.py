@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import factory
+
 from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord
 
 
@@ -58,3 +60,30 @@ def create_member_fixture(ixp, as_number, speed = 10000, is_rs_peer = False, dat
     )
     membership.save()
     return member
+
+
+class ASNFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ASN
+
+    name = factory.Faker("nic_handle", suffix="FAKE")
+    number = factory.Faker("random_number", digits=5)
+    peeringdb_id = factory.Faker("random_number", digits=3)
+    network_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
+    registration_country_code = factory.Faker("country_code")
+    created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class PeeringASNFactory(factory.DictFactory):
+    id = factory.Faker("random_number", digits=3)
+    asn = factory.Faker("random_number", digits=5)
+    name = factory.Faker("nic_handle", suffix="FAKE")
+    info_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
+    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+    class Params:
+        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)

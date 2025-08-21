@@ -33,7 +33,7 @@ CI = "https://github.com/InternetSociety/django-ixp-tracker/actions"
 
 
 [project.optional-dependencies]
-test = ["django-stubs", "pre-commit", "pytest", "pytest-django", "responses"]
+test = ["django-stubs", "factory-boy", "pre-commit", "pytest", "pytest-django", "responses"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "django_test_app.settings"
