@@ -70,16 +70,16 @@ def test_generates_ixp_counts():
     # so the stats use the historical member count rather than active_status
     # currently_active with three members
     active = IXPFactory(active_status=True)
-    create_member_fixture(active, member_since=one_month_before, date_left=one_month_after, quantity=3)
+    create_member_fixture(active, membership_properties={"start_date": one_month_before, "end_date": one_month_after}, quantity=3)
     # member active in the past
     member_in_past = IXPFactory(active_status=True, country_code=active.country_code)
-    create_member_fixture(member_in_past, member_since=one_month_before, date_left=one_month_before)
+    create_member_fixture(member_in_past, membership_properties={"start_date": one_month_before, "end_date": one_month_before})
     # member not yet active (as we are generating historical stats there could be members in the future)
     member_in_future = IXPFactory(active_status=True, country_code=active.country_code)
-    create_member_fixture(member_in_future, member_since=one_month_after, date_left=None)
+    create_member_fixture(member_in_future, membership_properties={"start_date": one_month_after})
     # currently_active but only two members
     not_enough_members = IXPFactory(active_status=True, country_code=active.country_code)
-    create_member_fixture(not_enough_members, member_since=one_month_before, date_left=one_month_after, quantity=2)
+    create_member_fixture(not_enough_members, membership_properties={"start_date": one_month_before, "end_date": one_month_after}, quantity=2)
 
     generate_stats(MockLookup(), stats_date)
 

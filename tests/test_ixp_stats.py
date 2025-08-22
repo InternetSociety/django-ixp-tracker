@@ -38,8 +38,8 @@ def test_with_no_data_generates_no_stats():
 
 def test_generates_capacity_rs_peering_and_member_count():
     ixp = IXPFactory()
-    create_member_fixture(ixp, speed=500, is_rs_peer=True)
-    create_member_fixture(ixp, speed=10000, is_rs_peer=False)
+    create_member_fixture(ixp, membership_properties={"speed": 500, "is_rs_peer": True})
+    create_member_fixture(ixp, membership_properties={"speed": 10000, "is_rs_peer": False})
 
     generate_stats(MockLookup())
 
@@ -65,8 +65,8 @@ def test_generates_stats_for_first_of_month():
 
 def test_does_not_count_members_marked_as_left():
     ixp = IXPFactory()
-    create_member_fixture(ixp, speed=500, is_rs_peer=False)
-    create_member_fixture(ixp, speed=10000, is_rs_peer=True, date_left=datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
+    create_member_fixture(ixp, membership_properties={"speed": 500, "is_rs_peer": False})
+    create_member_fixture(ixp, membership_properties={"speed": 10000, "is_rs_peer": True, "end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)})
 
     generate_stats(MockLookup())
 
@@ -78,7 +78,7 @@ def test_does_not_count_members_marked_as_left():
 
 def test_does_not_count_member_twice_if_they_rejoin():
     ixp = IXPFactory()
-    member = create_member_fixture(ixp, date_left=datetime(year=2024, month=4, day=1, tzinfo=timezone.utc))
+    member = create_member_fixture(ixp, membership_properties={"end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)})
     IXPMembershipRecordFactory(member=member)
 
     generate_stats(MockLookup())
@@ -90,8 +90,8 @@ def test_does_not_count_member_twice_if_they_rejoin():
 def test_does_not_count_members_not_yet_created():
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
     ixp = IXPFactory(created=stats_date)
-    create_member_fixture(ixp, member_since=datetime(year=2024, month=1, day=1))
-    create_member_fixture(ixp, member_since=datetime(year=2024, month=4, day=1))
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)})
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=4, day=1)})
 
     generate_stats(MockLookup(), stats_date)
 

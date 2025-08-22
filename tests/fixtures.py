@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from typing import TypedDict
 
 import factory
+from typing_extensions import NotRequired
 
 from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord
 
@@ -62,21 +64,25 @@ def create_member_fixture_deprecated(ixp, as_number, speed = 10000, is_rs_peer =
     return member
 
 
-def create_member_fixture(ixp, asn = None, date_left = None, member_since = None, quantity = 1, speed = None, is_rs_peer = None):
+class MemberProperties(TypedDict):
+    last_active: NotRequired[datetime]
+
+
+class MembershipProperties(TypedDict):
+    end_date: NotRequired[datetime]
+    start_date: NotRequired[datetime]
+    speed: NotRequired[int]
+    is_rs_peer: NotRequired[bool]
+
+
+def create_member_fixture(ixp, asn = None, quantity = 1, membership_properties: MembershipProperties = None, member_properties: MemberProperties = None):
     created = 0
     member = None
-    membership_properties = {}
-    if member_since is not None:
-        membership_properties["start_date"] = member_since
-    if date_left is not None:
-        membership_properties["end_date"] = date_left
-    if speed is not None:
-        membership_properties["speed"] = speed
-    if is_rs_peer is not None:
-        membership_properties["is_rs_peer"] = is_rs_peer
+    member_properties = member_properties or {}
+    membership_properties = membership_properties or {}
     while created < quantity:
         member_asn = asn or ASNFactory()
-        member = IXPMemberFactory(ixp=ixp, asn=member_asn)
+        member = IXPMemberFactory(ixp=ixp, asn=member_asn, **member_properties)
         IXPMembershipRecordFactory(member=member, **membership_properties)
         created += 1
     return member
