@@ -8,16 +8,9 @@ from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
 from ixp_tracker import importers
 from ixp_tracker.models import ASN
 
-pytestmark = pytest.mark.django_db
+from .fixtures import ASNFactory, PeeringASNFactory
 
-dummy_asn_data = {
-    "id": 3,
-    "asn": 6543,
-    "name": "New ASN",
-    "info_type": "non-profit",
-    "created": "2019-08-24T14:15:22Z",
-    "updated": "2019-08-24T14:15:22Z",
-}
+pytestmark = pytest.mark.django_db
 
 
 class TestLookup:
@@ -53,27 +46,23 @@ def test_with_no_existing_data_gets_all_data():
 
 def test_imports_new_asn():
     processor = importers.process_asn_data(TestLookup())
-    processor([dummy_asn_data])
+    processor([PeeringASNFactory()])
 
     asns = ASN.objects.all()
     assert len(asns) == 1
 
 
 def test_updates_existing_data():
-    asn = ASN(
-        name="Network Org",
-        number=dummy_asn_data["asn"],
-        peeringdb_id=dummy_asn_data["id"],
-        network_type="other",
-        registration_country_code="CH",
-        created=datetime(2019, 1, 1).replace(tzinfo=timezone.utc),
-        last_updated=datetime(2024, 5, 1).replace(tzinfo=timezone.utc)
+    updated_asn_data = PeeringASNFactory()
+    ASNFactory(
+        number=updated_asn_data["asn"],
+        peeringdb_id=updated_asn_data["id"],
+        last_updated=datetime(2024, 5, 1, tzinfo=timezone.utc)
     )
-    asn.save()
     with responses.RequestsMock() as rsps:
         rsps.get(
             url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-05-01&limit=200&skip=0",
-            body=json.dumps({"data": [dummy_asn_data]}),
+            body=json.dumps({"data": [updated_asn_data]}),
         )
         rsps.get(
             url=IXP_TRACKER_PEERING_DB_URL + "/net?updated__gte=2024-05-01&limit=200&skip=200",
@@ -83,13 +72,13 @@ def test_updates_existing_data():
 
         asns = ASN.objects.all()
         assert len(asns) == 1
-        updated = asns.filter(peeringdb_id=dummy_asn_data["id"]).first()
-        assert updated.name == "New ASN"
+        updated = asns.filter(peeringdb_id=updated_asn_data["id"]).first()
+        assert updated.name == updated_asn_data["name"]
         assert updated.registration_country_code == "AU"
 
 
 def test_handles_errors_with_source_data():
-    data_with_problems = dummy_asn_data
+    data_with_problems = PeeringASNFactory()
     data_with_problems["updated"] = "abc"
     data_with_problems["asn"] = "foobar"
 
