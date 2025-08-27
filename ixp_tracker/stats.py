@@ -22,11 +22,17 @@ class CountryStats(TypedDict):
 def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
+    date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_members = (IXPMember.objects
                    .filter(
                         Q(memberships__start_date__lte=stats_date) &
                         (Q(memberships__end_date=None) | Q(memberships__end_date__gte=stats_date))
+                    )).all()
+    all_members_12_months_ago = (IXPMember.objects
+                   .filter(
+                        Q(memberships__start_date__lte=date_12_months_ago) &
+                        (Q(memberships__end_date=None) | Q(memberships__end_date__gte=date_12_months_ago))
                     )).all()
     all_stats_per_country: Dict[str, CountryStats] = {}
     for code, _ in list(countries):
@@ -40,6 +46,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     for ixp in ixps:
         logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
         members = [member for member in all_members if member.ixp == ixp]
+        members_12_months_ago = [member for member in all_members_12_months_ago if member.ixp == ixp]
         member_count = len(members)
         capacity = 0
         rs_peers = 0
@@ -69,6 +76,9 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         if country_stats.get("routed_asns") is None:
             all_stats_per_country[ixp_country]["routed_asns"] = geo_lookup.get_routed_asns_for_country(ixp_country, stats_date)
         member_asns = [member.asn.number for member in members]
+        member_asns_12_months_ago = [member.asn.number for member in members_12_months_ago]
+        members_left = [asn for asn in member_asns_12_months_ago if asn not in member_asns]
+        members_joined = [asn for asn in member_asns if asn not in member_asns_12_months_ago]
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
@@ -84,6 +94,8 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "local_asns_members_rate": local_asns_members_rate,
                 "local_routed_asns_members_rate": local_routed_asns_members_rate,
                 "rs_peering_rate": rs_peering_rate,
+                "members_joined_last_12_months": len(members_joined),
+                "members_left_last_12_months": len(members_left),
             }
         )
         # Only aggregate this IXP's stats into the country stats if it's active

@@ -150,3 +150,24 @@ def test_calculate_local_asns_members_rate_ignores_members_not_in_country_list()
     rate = calculate_local_asns_members_rate([12345, 789], [12345, 446, 5050, 54321])
 
     assert rate == 0.25
+
+
+def test_counts_net_joins_and_net_leaves_since_12_months():
+    stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
+    ixp = IXPFactory(created=stats_date)
+    # One member joined more than 12 months ago and is still a member (i.e. not counted in either)
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)})
+    # Two members joined within the last 12 months
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)})
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=12, day=1)})
+    # One member joined more than 12 months ago but has since left
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2022, month=11, day=1), "end_date": datetime(year=2023, month=6, day=17)})
+    # One member left and rejoined within the 12 months (so should not be counted)
+    member = create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2022, month=11, day=1), "end_date": datetime(year=2023, month=6, day=17)})
+    IXPMembershipRecordFactory(member=member, start_date=datetime(year=2023, month=11, day=1))
+
+    generate_stats(MockLookup(), stats_date)
+
+    ixp_stats = StatsPerIXP.objects.all().first()
+    assert ixp_stats.members_joined_last_12_months == 2
+    assert ixp_stats.members_left_last_12_months == 1

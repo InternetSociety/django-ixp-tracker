@@ -15,7 +15,9 @@ classifiers = [
 dependencies = [
     "django>4.2",
     "django-countries>7.6",
-    "python-dateutil"
+    "python-dateutil",
+    "requests",
+    "typing-extensions"
 ]
 
 [build-system]
