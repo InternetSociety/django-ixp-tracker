@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, TypedDict, Union
 
 from django_countries import countries
@@ -23,6 +23,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
     stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
+    date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_members = (IXPMember.objects
                    .filter(
@@ -82,6 +83,9 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
+        stats_last_month = StatsPerIXP.objects.filter(ixp=ixp, stats_date=date_last_month.date()).first()
+        members_last_month = stats_last_month.members if stats_last_month else 0
+        growth_members = member_count - members_last_month
         # We always save the stats per IXP so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         StatsPerIXP.objects.update_or_create(
             ixp=ixp,
@@ -96,6 +100,8 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "rs_peering_rate": rs_peering_rate,
                 "members_joined_last_12_months": len(members_joined),
                 "members_left_last_12_months": len(members_left),
+                "growth_members": growth_members,
+                "growth_members_percent": (growth_members / members_last_month) if members_last_month > 0 else 1,
             }
         )
         # Only aggregate this IXP's stats into the country stats if it's active

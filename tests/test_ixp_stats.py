@@ -5,7 +5,7 @@ import pytest
 
 from ixp_tracker.models import StatsPerIXP
 from ixp_tracker.stats import calculate_local_asns_members_rate, generate_stats
-from tests.fixtures import ASNFactory, IXPFactory, IXPMembershipRecordFactory, create_member_fixture
+from tests.fixtures import ASNFactory, IXPFactory, IXPMembershipRecordFactory, StatsPerIXPFactory, create_member_fixture
 
 pytestmark = pytest.mark.django_db
 
@@ -171,3 +171,19 @@ def test_counts_net_joins_and_net_leaves_since_12_months():
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members_joined_last_12_months == 2
     assert ixp_stats.members_left_last_12_months == 1
+
+
+def test_adds_member_growth_stats():
+    stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
+    ixp = IXPFactory(created=stats_date)
+    # Has 5 current members
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)}, quantity=5)
+    last_month = (stats_date - timedelta(days=1)).replace(day=1).date()
+    # Note the fixture would have had 5 members last month but we hardcode the stats to show only 4
+    StatsPerIXPFactory(ixp=ixp, members=4, stats_date=last_month)
+
+    generate_stats(MockLookup(), stats_date)
+
+    new_ixp_stats = StatsPerIXP.objects.filter(stats_date=stats_date.date()).first()
+    assert new_ixp_stats.monthly_members_change == 1
+    assert new_ixp_stats.monthly_members_change_percent == 0.25

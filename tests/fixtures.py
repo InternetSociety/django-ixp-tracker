@@ -4,7 +4,7 @@ from typing import TypedDict
 import factory
 from typing_extensions import NotRequired
 
-from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord
+from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerIXP
 
 
 class MemberProperties(TypedDict):
@@ -124,3 +124,20 @@ class PeeringNetIXLANFactory(factory.DictFactory):
     class Params:
         created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
         updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+
+
+class StatsPerIXPFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StatsPerIXP
+
+    ixp = None
+    stats_date = factory.Faker("date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    capacity = factory.Faker("random_number", digits=5)
+    members = factory.Faker("random_number", digits=3)
+    local_asns_members_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    local_routed_asns_members_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    rs_peering_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    members_joined_last_12_months = factory.Faker("random_number", digits=2)
+    members_left_last_12_months = factory.Faker("random_number", digits=2)
+    growth_members = factory.Faker("random_number", digits=2)
+    growth_members_percent = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)

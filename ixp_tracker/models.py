@@ -101,6 +101,8 @@ class StatsPerIXP(models.Model):
     rs_peering_rate = models.FloatField()
     members_joined_last_12_months = models.IntegerField()
     members_left_last_12_months = models.IntegerField()
+    monthly_members_change = models.IntegerField()
+    monthly_members_change_percent = models.FloatField()
 
     def __str__(self):
         return f"{self.ixp.name} - {self.stats_date}"
