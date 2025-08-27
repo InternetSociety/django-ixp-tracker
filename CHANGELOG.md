@@ -3,6 +3,7 @@
 ## 1.0
 - params for `import_data()` have changed, use `import_data({"geo_lookup": geo_lookup_instance})` rather than `import_data(geo_lookup_instance)`
 - breaking change to `StatsPerIXP` where no fields are now nullable. Some fields are temporarily populated with zero so all stats should be regenerated.
+- remove support for Django < 5.2 and Python < 3.10
 
 ## 0.15
 - change definition of active status for an IXP from at least 1 member to at least 3 members
