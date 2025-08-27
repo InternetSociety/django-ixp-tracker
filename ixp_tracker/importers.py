@@ -3,12 +3,13 @@ import json
 from json.decoder import JSONDecodeError
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Protocol
+from typing import Callable, List, Protocol, TypedDict
 
 import requests
 import dateutil.parser
 from django.db.models import Q
 from django_countries import countries
+from typing_extensions import NotRequired
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
@@ -31,19 +32,24 @@ class ASNGeoLookup(Protocol):
         pass
 
 
+class AdditionalDataSources(TypedDict):
+    geo_lookup: ASNGeoLookup
+    manrs_participants: NotRequired[list[int]]
+
+
 def import_data(
-        geo_lookup: ASNGeoLookup,
+        additional_data: AdditionalDataSources,
         reset: bool = False,
         processing_date: datetime = None,
         page_limit: int = 200
 ):
     if processing_date is None:
         processing_date = datetime.now(timezone.utc)
-        import_ixps(processing_date)
+        import_ixps(processing_date, additional_data.get("manrs_participants", []))
         logger.debug("Imported IXPs")
-        import_asns(geo_lookup, reset, page_limit)
+        import_asns(additional_data["geo_lookup"], reset, page_limit)
         logger.debug("Imported ASNs")
-        import_members(processing_date, geo_lookup)
+        import_members(processing_date, additional_data["geo_lookup"])
         logger.debug("Imported members")
         toggle_ixp_active_status(processing_date)
         logger.debug("Toggled IXPs active status")
@@ -68,11 +74,11 @@ def import_data(
             # It seems some of the Peering dumps use single quotes so try and load using ast in this case
             backfill_data = ast.literal_eval(backfill_raw)
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
-        process_ixp_data(processing_date)(ixp_data)
+        process_ixp_data(processing_date, additional_data.get("manrs_participants", []))(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
-        process_asn_data(geo_lookup)(asn_data)
+        process_asn_data(additional_data["geo_lookup"])(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
-        process_member_data(processing_date, geo_lookup)(member_data)
+        process_member_data(processing_date, additional_data["geo_lookup"])(member_data)
         toggle_ixp_active_status(processing_date)
         logger.debug("Toggled IXPs active status")
 
@@ -104,11 +110,11 @@ def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: d
     return True
 
 
-def import_ixps(processing_date) -> bool:
-    return get_data("/ix", process_ixp_data(processing_date))
+def import_ixps(processing_date, manrs_participants: list[int]) -> bool:
+    return get_data("/ix", process_ixp_data(processing_date, manrs_participants))
 
 
-def process_ixp_data(processing_date: datetime):
+def process_ixp_data(processing_date: datetime, manrs_participants: list[int]):
     def do_process_ixp_data(all_ixp_data):
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
@@ -128,6 +134,7 @@ def process_ixp_data(processing_date: datetime):
                         "created": ixp_data["created"],
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
+                        "manrs_participant": ixp_data["id"] in manrs_participants,
                     }
                 )
                 logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})

@@ -13,6 +13,7 @@ from ixp_tracker.models import ASN, IXP, IXPMember
 from .fixtures import PeeringASNFactory, PeeringIXFactory, PeeringNetIXLANFactory
 
 pytestmark = pytest.mark.django_db
+additional_data = {"geo_lookup": DefaultASNGeoLookup()}
 
 
 def test_with_no_data_returned_does_nothing():
@@ -22,7 +23,7 @@ def test_with_no_data_returned_does_nothing():
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
             body=json.dumps({"ix": {"data": []}, "net": {"data": []}, "netixlan": {"data": []}}),
         )
-        import_data(DefaultASNGeoLookup(), False, backfill_date)
+        import_data(additional_data, False, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -41,7 +42,7 @@ def test_handles_malformed_archives():
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
             body=json.dumps({}),
         )
-        import_data(DefaultASNGeoLookup(), False, backfill_date)
+        import_data(additional_data, False, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -60,7 +61,7 @@ def test_handles_single_quoted_json():
             url=DATA_ARCHIVE_URL.format(year=backfill_date.year, month=backfill_date.month, day=backfill_date.day),
             body="{'ix': {'data': []}, 'net': {'data': []}, 'netixlan': {'data': []}}",
         )
-        import_data(DefaultASNGeoLookup(), False, backfill_date)
+        import_data(additional_data, False, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -81,7 +82,7 @@ def test_queries_for_every_day_of_month():
             url=re.compile(data_url),
             status=404,
         )
-        import_data(DefaultASNGeoLookup(), False, backfill_date)
+        import_data(additional_data, False, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -108,7 +109,7 @@ def test_adds_all_data():
                 }
             ),
         )
-        import_data(DefaultASNGeoLookup(), False, backfill_date)
+        import_data(additional_data, False, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1

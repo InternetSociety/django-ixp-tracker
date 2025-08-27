@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0
+- params for `import_data()` have changed, use `import_data({"geo_lookup": geo_lookup_instance})` rather than `import_data(geo_lookup_instance)`
+
 ## 0.15
 - change definition of active status for an IXP from at least 1 member to at least 3 members
 

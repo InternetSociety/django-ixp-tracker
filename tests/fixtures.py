@@ -53,6 +53,7 @@ class IXPFactory(factory.django.DjangoModelFactory):
     city = factory.Faker("city")
     website = factory.Faker("url", schemes=["https"])
     active_status = factory.Faker("pybool")
+    manrs_participant = factory.Faker("pybool")
     peeringdb_id = factory.Faker("random_number", digits=3)
     country_code = factory.Faker("country_code")
     created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)

@@ -8,6 +8,7 @@ class IXP(models.Model):
     city = models.CharField(max_length=200)
     website = models.URLField(null=True)
     active_status = models.BooleanField(default=True)
+    manrs_participant = models.BooleanField(default=False)
     peeringdb_id = models.IntegerField(null=True)
     country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
