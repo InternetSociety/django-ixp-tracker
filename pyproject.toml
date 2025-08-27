@@ -3,7 +3,7 @@ name = "django-ixp-tracker"
 version = "0.15"
 description = "Library to retrieve and manipulate data about IXPs"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 authors = [{name = "Internet Society"}]
 license = {text = "Apache-2.0"}
 classifiers = [
@@ -13,7 +13,7 @@ classifiers = [
     "Framework :: Django",
 ]
 dependencies = [
-    "django>4.2",
+    "django>=5.2",
     "django-countries>7.6",
     "python-dateutil",
     "requests",
