@@ -32,6 +32,12 @@ class ASNGeoLookup(Protocol):
         pass
 
 
+class ASNCustomerLookup(Protocol):
+
+    def get_customer_asns(self, asns: list[int], as_at: datetime) -> List[int]:
+        pass
+
+
 class AdditionalDataSources(TypedDict):
     geo_lookup: ASNGeoLookup
     manrs_participants: NotRequired[list[int]]

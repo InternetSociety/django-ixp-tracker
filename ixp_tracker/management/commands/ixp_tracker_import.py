@@ -6,8 +6,8 @@ from typing import List
 
 from django.core.management import BaseCommand
 
-from ixp_tracker.conf import IXP_TRACKER_GEO_LOOKUP_FACTORY
-from ixp_tracker.importers import ASNGeoLookup, import_data
+from ixp_tracker.conf import IXP_TRACKER_CUSTOMER_LOOKUP_FACTORY, IXP_TRACKER_GEO_LOOKUP_FACTORY
+from ixp_tracker.importers import ASNCustomerLookup, ASNGeoLookup, import_data
 from ixp_tracker.stats import generate_stats
 
 logger = logging.getLogger("ixp_tracker")
@@ -25,9 +25,15 @@ class DefaultASNGeoLookup(ASNGeoLookup):
         pass
 
 
-def load_geo_lookup(geo_lookup_name):
-    if geo_lookup_name is not None:
-        lookup_parts = geo_lookup_name.split(".")
+class DefaultASNCustomerLookup(ASNCustomerLookup):
+
+    def get_customer_asns(self, asns: list[int], as_at: datetime) -> List[int]:
+        pass
+
+
+def load_lookup(lookup_name):
+    if lookup_name is not None:
+        lookup_parts = lookup_name.split(".")
         factory_name = lookup_parts.pop()
         module_name = ".".join(lookup_parts)
         logger.debug("Trying to load geo lookup", extra={"module_name": module_name, "factory": factory_name})
@@ -48,20 +54,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             logger.debug("Importing IXP data")
-            geo_lookup = load_geo_lookup(IXP_TRACKER_GEO_LOOKUP_FACTORY) or DefaultASNGeoLookup()
+            geo_lookup: ASNGeoLookup = load_lookup(IXP_TRACKER_GEO_LOOKUP_FACTORY) or DefaultASNGeoLookup()
+            customer_lookup: ASNCustomerLookup = load_lookup(IXP_TRACKER_CUSTOMER_LOOKUP_FACTORY) or DefaultASNCustomerLookup()
             reset = options["reset_asns"]
             backfill_date = options["backfill"]
             processing_date = None
             if backfill_date is None:
-                import_data(geo_lookup, reset)
+                import_data({"geo_lookup": geo_lookup}, reset)
             else:
                 processing_date = datetime.strptime(backfill_date, "%Y%m").replace(tzinfo=timezone.utc)
                 if reset:
                     logger.warning("The --reset option has no effect when running a backfill")
-                import_data(geo_lookup, False, processing_date)
+                import_data({"geo_lookup": geo_lookup}, False, processing_date)
 
             logger.debug("Generating stats")
-            generate_stats(geo_lookup, processing_date)
+            generate_stats(geo_lookup, customer_lookup, processing_date)
             logger.info("Import finished")
         except Exception as e:
             logging.error("Failed to import data", extra={"error": str(e), "trace": traceback.format_exc()})

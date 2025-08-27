@@ -1,11 +1,11 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, TypedDict, Union
+from typing import Dict, Iterable, List, TypedDict, Union
 
 from django_countries import countries
 from django.db.models import Q
 
-from ixp_tracker.importers import ASNGeoLookup, is_ixp_active
+from ixp_tracker.importers import ASNCustomerLookup, ASNGeoLookup, is_ixp_active
 from ixp_tracker.models import IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 logger = logging.getLogger("ixp_tracker")
@@ -16,10 +16,11 @@ class CountryStats(TypedDict):
     all_asns: Union[List[int], None]
     routed_asns: Union[List[int], None]
     member_asns: set
+    member_and_customer_asns: set
     total_capacity: int
 
 
-def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
+def generate_stats(geo_lookup: ASNGeoLookup, customer_lookup: ASNCustomerLookup, stats_date: datetime = None):
     stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
@@ -42,6 +43,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             "all_asns": None,
             "routed_asns": None,
             "member_asns": set(),
+            "member_and_customer_asns": set(),
             "total_capacity": 0
         }
     for ixp in ixps:
@@ -69,6 +71,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "all_asns": None,
                 "routed_asns": None,
                 "member_asns": set(),
+                "member_and_customer_asns": set(),
                 "total_capacity": 0
             }
             all_stats_per_country[ixp_country] = country_stats
@@ -80,8 +83,11 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
         member_asns_12_months_ago = [member.asn.number for member in members_12_months_ago]
         members_left = [asn for asn in member_asns_12_months_ago if asn not in member_asns]
         members_joined = [asn for asn in member_asns if asn not in member_asns_12_months_ago]
+        customer_asns = customer_lookup.get_customer_asns(member_asns, stats_date)
+        members_and_customers = set(member_asns + customer_asns)
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
+        local_routed_asns_members_customers_rate = calculate_local_asns_members_rate(members_and_customers, all_stats_per_country[ixp_country]["routed_asns"])
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
         stats_last_month = StatsPerIXP.objects.filter(ixp=ixp, stats_date=date_last_month.date()).first()
         members_last_month = stats_last_month.members if stats_last_month else 0
@@ -97,11 +103,12 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "capacity": (capacity/1000),
                 "local_asns_members_rate": local_asns_members_rate,
                 "local_routed_asns_members_rate": local_routed_asns_members_rate,
+                "local_routed_asns_members_customers_rate": local_routed_asns_members_customers_rate,
                 "rs_peering_rate": rs_peering_rate,
                 "members_joined_last_12_months": len(members_joined),
                 "members_left_last_12_months": len(members_left),
-                "growth_members": growth_members,
-                "growth_members_percent": (growth_members / members_last_month) if members_last_month > 0 else 1,
+                "monthly_members_change": growth_members,
+                "monthly_members_change_percent": (growth_members / members_last_month) if members_last_month > 0 else 1,
             }
         )
         # Only aggregate this IXP's stats into the country stats if it's active
@@ -109,6 +116,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             all_stats_per_country[ixp_country]["ixp_count"] += 1
             # We only count unique ASNs that are members of an IXP in a country
             all_stats_per_country[ixp_country]["member_asns"] |= set(member_asns)
+            all_stats_per_country[ixp_country]["member_and_customer_asns"] |= members_and_customers
             # But we count capacity for all members, i.e. an ASN member at 2 IXPs will have capacity at each included in the sum
             all_stats_per_country[ixp_country]["total_capacity"] += capacity
     for code, _ in list(countries):
@@ -119,6 +127,7 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
             country_stats["routed_asns"] = geo_lookup.get_routed_asns_for_country(code, stats_date)
         local_asns_members_rate = calculate_local_asns_members_rate(country_stats["member_asns"], country_stats["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(country_stats["member_asns"], country_stats["routed_asns"])
+        local_routed_asns_members_customers_rate = calculate_local_asns_members_rate(country_stats["member_and_customer_asns"], country_stats["routed_asns"])
         StatsPerCountry.objects.update_or_create(
             country_code=code,
             stats_date=stats_date.date(),
@@ -129,12 +138,13 @@ def generate_stats(geo_lookup: ASNGeoLookup, stats_date: datetime = None):
                 "member_count": len(country_stats["member_asns"]),
                 "asns_ixp_member_rate": local_asns_members_rate,
                 "routed_asns_ixp_member_rate": local_routed_asns_members_rate,
+                "routed_asns_ixp_member_customers_rate": local_routed_asns_members_customers_rate,
                 "total_capacity": (country_stats["total_capacity"]/1000),
             }
         )
 
 
-def calculate_local_asns_members_rate(member_asns: List[int], country_asns: List[int]) -> float:
+def calculate_local_asns_members_rate(member_asns: Iterable[int], country_asns: List[int]) -> float:
     if len(country_asns) == 0:
         return 0
     # Ignore the current country for a member ASN (as that might have changed) but just get all current members
