@@ -38,10 +38,19 @@ class ASN(models.Model):
         ('not-disclosed', 'Not Disclosed'),
         ('other', 'Other'),
     ]
+    # Note: the above doesn't seem to match the spec at https://www.peeringdb.com/apidocs/#tag/api/operation/list%20net
+    # (NSP, Content, Cable/DSL/ISP, Enterprise, Educational/Research, Non-Profit, Route Server, Network Services, Route Collector, Government)
+    PEERING_POLICY_CHOICES = [
+        ("open", "Open"), 
+        ("selective", "Selective"), 
+        ("restrictive", "Restrictive"), 
+        ("no", "No")
+    ]
     name = models.CharField(max_length=500)
     number = models.IntegerField()
     peeringdb_id = models.IntegerField(null=True)
     network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default='not-disclosed')
+    peering_policy = models.CharField(max_length=50, choices=PEERING_POLICY_CHOICES, default="")
     registration_country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
