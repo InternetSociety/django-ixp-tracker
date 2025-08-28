@@ -1,40 +1,16 @@
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 import pytest
 
 from ixp_tracker.models import StatsPerCountry
 from ixp_tracker.stats import generate_stats
-from tests.fixtures import ASNFactory, IXPFactory, create_member_fixture
+from tests.fixtures import ASNFactory, IXPFactory, MockLookup, create_member_fixture
 
 pytestmark = pytest.mark.django_db
 
 
-class MockLookup:
-
-    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = []):
-        self.asns = asns
-        self.routed_asns = routed_asns
-        self.customer_asns = customer_asns
-
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        pass
-
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        pass
-
-    def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
-        return self.asns
-
-    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
-        return self.routed_asns
-
-    def get_customer_asns(self, asns: list[int], as_at: datetime) -> List[int]:
-        return self.customer_asns
-
-
 def test_with_no_data_generates_no_stats():
-    generate_stats(MockLookup(), MockLookup())
+    generate_stats(MockLookup())
 
     stats = StatsPerCountry.objects.all()
     assert len(stats) == 249
@@ -56,7 +32,7 @@ def test_generates_stats():
 
     asns_in_country = [member_one_multiple_ixps.asn.number, member_two_multiple_ixps.asn.number, non_member_asn.number]
     routed_asns_in_country = [member_one_multiple_ixps.asn.number, non_member_asn.number, customer_asn, ASNFactory().number]
-    generate_stats(MockLookup(asns=asns_in_country, routed_asns=routed_asns_in_country), MockLookup(customer_asns=[customer_asn]))
+    generate_stats(MockLookup(asns=asns_in_country, routed_asns=routed_asns_in_country, customer_asns=[customer_asn]))
 
     stats = StatsPerCountry.objects.filter(country_code=ixp_one.country_code).first()
     assert stats.ixp_count == 2
@@ -87,7 +63,7 @@ def test_generates_ixp_counts():
     not_enough_members = IXPFactory(active_status=True, country_code=active.country_code)
     create_member_fixture(not_enough_members, membership_properties={"start_date": one_month_before, "end_date": one_month_after}, quantity=2)
 
-    generate_stats(MockLookup(), MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date)
 
     stats = StatsPerCountry.objects.filter(country_code=active.country_code).first()
     assert stats.ixp_count == 1
@@ -97,7 +73,7 @@ def test_generates_ixp_counts():
 def test_handles_invalid_country():
     IXPFactory(country_code="XK")
 
-    generate_stats(MockLookup(), MockLookup())
+    generate_stats(MockLookup())
 
     country_stats = StatsPerCountry.objects.filter(country_code="XK").first()
     assert country_stats is None

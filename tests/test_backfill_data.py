@@ -7,13 +7,13 @@ import responses
 
 from ixp_tracker.conf import DATA_ARCHIVE_URL
 from ixp_tracker.importers import import_data
-from ixp_tracker.management.commands.ixp_tracker_import import DefaultASNGeoLookup
+from ixp_tracker.management.commands.ixp_tracker_import import DefaultAdditionalDataSources
 from ixp_tracker.models import ASN, IXP, IXPMember
 
 from .fixtures import PeeringASNFactory, PeeringIXFactory, PeeringNetIXLANFactory
 
 pytestmark = pytest.mark.django_db
-additional_data = {"geo_lookup": DefaultASNGeoLookup()}
+additional_data = DefaultAdditionalDataSources()
 
 
 def test_with_no_data_returned_does_nothing():

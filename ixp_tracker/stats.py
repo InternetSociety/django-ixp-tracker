@@ -5,7 +5,7 @@ from typing import Dict, Iterable, List, TypedDict, Union
 from django_countries import countries
 from django.db.models import Q
 
-from ixp_tracker.importers import ASNCustomerLookup, ASNGeoLookup, is_ixp_active
+from ixp_tracker.importers import AdditionalDataSources, is_ixp_active
 from ixp_tracker.models import IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 logger = logging.getLogger("ixp_tracker")
@@ -20,7 +20,7 @@ class CountryStats(TypedDict):
     total_capacity: int
 
 
-def generate_stats(geo_lookup: ASNGeoLookup, customer_lookup: ASNCustomerLookup, stats_date: datetime = None):
+def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
     stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
@@ -76,14 +76,14 @@ def generate_stats(geo_lookup: ASNGeoLookup, customer_lookup: ASNCustomerLookup,
             }
             all_stats_per_country[ixp_country] = country_stats
         if country_stats.get("all_asns") is None:
-            all_stats_per_country[ixp_country]["all_asns"] = geo_lookup.get_asns_for_country(ixp_country, stats_date)
+            all_stats_per_country[ixp_country]["all_asns"] = lookup.get_asns_for_country(ixp_country, stats_date)
         if country_stats.get("routed_asns") is None:
-            all_stats_per_country[ixp_country]["routed_asns"] = geo_lookup.get_routed_asns_for_country(ixp_country, stats_date)
+            all_stats_per_country[ixp_country]["routed_asns"] = lookup.get_routed_asns_for_country(ixp_country, stats_date)
         member_asns = [member.asn.number for member in members]
         member_asns_12_months_ago = [member.asn.number for member in members_12_months_ago]
         members_left = [asn for asn in member_asns_12_months_ago if asn not in member_asns]
         members_joined = [asn for asn in member_asns if asn not in member_asns_12_months_ago]
-        customer_asns = customer_lookup.get_customer_asns(member_asns, stats_date)
+        customer_asns = lookup.get_customer_asns(member_asns, stats_date)
         members_and_customers = set(member_asns + customer_asns)
         local_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
@@ -122,9 +122,9 @@ def generate_stats(geo_lookup: ASNGeoLookup, customer_lookup: ASNCustomerLookup,
     for code, _ in list(countries):
         country_stats = all_stats_per_country[code]
         if country_stats.get("all_asns") is None:
-            country_stats["all_asns"] = geo_lookup.get_asns_for_country(code, stats_date)
+            country_stats["all_asns"] = lookup.get_asns_for_country(code, stats_date)
         if country_stats.get("routed_asns") is None:
-            country_stats["routed_asns"] = geo_lookup.get_routed_asns_for_country(code, stats_date)
+            country_stats["routed_asns"] = lookup.get_routed_asns_for_country(code, stats_date)
         local_asns_members_rate = calculate_local_asns_members_rate(country_stats["member_asns"], country_stats["all_asns"])
         local_routed_asns_members_rate = calculate_local_asns_members_rate(country_stats["member_asns"], country_stats["routed_asns"])
         local_routed_asns_members_customers_rate = calculate_local_asns_members_rate(country_stats["member_and_customer_asns"], country_stats["routed_asns"])

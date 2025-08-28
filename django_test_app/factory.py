@@ -1,5 +1,5 @@
-from ixp_tracker.management.commands.ixp_tracker_import import DefaultASNGeoLookup
+from ixp_tracker.management.commands.ixp_tracker_import import DefaultAdditionalDataSources
 
 
-def return_geo_lookup():
-    return DefaultASNGeoLookup()
+def return_data_lookup():
+    return DefaultAdditionalDataSources()

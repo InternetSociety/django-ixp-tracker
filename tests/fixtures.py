@@ -4,6 +4,7 @@ from typing import TypedDict
 import factory
 from typing_extensions import NotRequired
 
+from ixp_tracker.importers import AdditionalDataSources
 from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerIXP
 
 
@@ -142,3 +143,30 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     members_left_last_12_months = factory.Faker("random_number", digits=2)
     monthly_members_change = factory.Faker("random_number", digits=2)
     monthly_members_change_percent = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+
+
+class MockLookup(AdditionalDataSources):
+
+    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = []):
+        self.asns = asns
+        self.routed_asns = routed_asns
+        self.customer_asns = customer_asns
+        self.manrs_participants = manrs_participants
+
+    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
+        pass
+
+    def get_status(self, asn: int, as_at: datetime) -> str:
+        pass
+
+    def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return self.asns
+
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return self.routed_asns
+
+    def get_customer_asns(self, asns: list[int], as_at: datetime) -> list[int]:
+        return self.customer_asns
+
+    def get_manrs_participants(self, as_at: datetime) -> list[int]:
+        return self.manrs_participants

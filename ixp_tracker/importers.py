@@ -3,44 +3,19 @@ import json
 from json.decoder import JSONDecodeError
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Protocol, TypedDict
+from typing import Callable
 
 import requests
 import dateutil.parser
 from django.db.models import Q
 from django_countries import countries
-from typing_extensions import NotRequired
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
+from ixp_tracker.data_lookup import ASNGeoLookup, AdditionalDataSources, MANRSParticipantsLookup
 
 logger = logging.getLogger("ixp_tracker")
 
-
-class ASNGeoLookup(Protocol):
-
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        pass
-
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        pass
-
-    def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
-        pass
-
-    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
-        pass
-
-
-class ASNCustomerLookup(Protocol):
-
-    def get_customer_asns(self, asns: list[int], as_at: datetime) -> List[int]:
-        pass
-
-
-class AdditionalDataSources(TypedDict):
-    geo_lookup: ASNGeoLookup
-    manrs_participants: NotRequired[list[int]]
 
 
 def import_data(
@@ -51,11 +26,11 @@ def import_data(
 ):
     if processing_date is None:
         processing_date = datetime.now(timezone.utc)
-        import_ixps(processing_date, additional_data.get("manrs_participants", []))
+        import_ixps(processing_date, additional_data)
         logger.debug("Imported IXPs")
-        import_asns(additional_data["geo_lookup"], reset, page_limit)
+        import_asns(additional_data, reset, page_limit)
         logger.debug("Imported ASNs")
-        import_members(processing_date, additional_data["geo_lookup"])
+        import_members(processing_date, additional_data)
         logger.debug("Imported members")
         toggle_ixp_active_status(processing_date)
         logger.debug("Toggled IXPs active status")
@@ -80,11 +55,11 @@ def import_data(
             # It seems some of the Peering dumps use single quotes so try and load using ast in this case
             backfill_data = ast.literal_eval(backfill_raw)
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
-        process_ixp_data(processing_date, additional_data.get("manrs_participants", []))(ixp_data)
+        process_ixp_data(processing_date, additional_data)(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
-        process_asn_data(additional_data["geo_lookup"])(asn_data)
+        process_asn_data(additional_data)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
-        process_member_data(processing_date, additional_data["geo_lookup"])(member_data)
+        process_member_data(processing_date, additional_data)(member_data)
         toggle_ixp_active_status(processing_date)
         logger.debug("Toggled IXPs active status")
 
@@ -116,11 +91,11 @@ def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: d
     return True
 
 
-def import_ixps(processing_date, manrs_participants: list[int]) -> bool:
-    return get_data("/ix", process_ixp_data(processing_date, manrs_participants))
+def import_ixps(processing_date, manrs_lookup: MANRSParticipantsLookup) -> bool:
+    return get_data("/ix", process_ixp_data(processing_date, manrs_lookup))
 
 
-def process_ixp_data(processing_date: datetime, manrs_participants: list[int]):
+def process_ixp_data(processing_date: datetime, manrs_lookup: MANRSParticipantsLookup):
     def do_process_ixp_data(all_ixp_data):
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
@@ -140,7 +115,7 @@ def process_ixp_data(processing_date: datetime, manrs_participants: list[int]):
                         "created": ixp_data["created"],
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
-                        "manrs_participant": ixp_data["id"] in manrs_participants,
+                        "manrs_participant": ixp_data["id"] in manrs_lookup.get_manrs_participants(processing_date),
                     }
                 )
                 logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})

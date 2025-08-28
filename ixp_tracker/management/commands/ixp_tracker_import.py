@@ -1,47 +1,15 @@
-import importlib
 import logging
 import traceback
 from datetime import datetime, timezone
-from typing import List
 
 from django.core.management import BaseCommand
 
-from ixp_tracker.conf import IXP_TRACKER_CUSTOMER_LOOKUP_FACTORY, IXP_TRACKER_GEO_LOOKUP_FACTORY
-from ixp_tracker.importers import ASNCustomerLookup, ASNGeoLookup, import_data
+from ixp_tracker.conf import IXP_TRACKER_DATA_LOOKUP_FACTORY
+from ixp_tracker.data_lookup import AdditionalDataSources, DefaultAdditionalDataSources, load_lookup
+from ixp_tracker.importers import import_data
 from ixp_tracker.stats import generate_stats
 
 logger = logging.getLogger("ixp_tracker")
-
-
-class DefaultASNGeoLookup(ASNGeoLookup):
-
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        return "ZZ"
-
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        return "assigned"
-
-    def get_asns_for_country(self, country: str, as_at: datetime) -> List[int]:
-        pass
-
-
-class DefaultASNCustomerLookup(ASNCustomerLookup):
-
-    def get_customer_asns(self, asns: list[int], as_at: datetime) -> List[int]:
-        pass
-
-
-def load_lookup(lookup_name):
-    if lookup_name is not None:
-        lookup_parts = lookup_name.split(".")
-        factory_name = lookup_parts.pop()
-        module_name = ".".join(lookup_parts)
-        logger.debug("Trying to load geo lookup", extra={"module_name": module_name, "factory": factory_name})
-        if module_name and factory_name:
-            imported_module = importlib.import_module(module_name)
-            factory = getattr(imported_module, factory_name)
-            return factory()
-    return None
 
 
 class Command(BaseCommand):
@@ -54,21 +22,20 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             logger.debug("Importing IXP data")
-            geo_lookup: ASNGeoLookup = load_lookup(IXP_TRACKER_GEO_LOOKUP_FACTORY) or DefaultASNGeoLookup()
-            customer_lookup: ASNCustomerLookup = load_lookup(IXP_TRACKER_CUSTOMER_LOOKUP_FACTORY) or DefaultASNCustomerLookup()
+            data_lookup: AdditionalDataSources = load_lookup(IXP_TRACKER_DATA_LOOKUP_FACTORY) or DefaultAdditionalDataSources()
             reset = options["reset_asns"]
             backfill_date = options["backfill"]
             processing_date = None
             if backfill_date is None:
-                import_data({"geo_lookup": geo_lookup}, reset)
+                import_data(data_lookup, reset)
             else:
                 processing_date = datetime.strptime(backfill_date, "%Y%m").replace(tzinfo=timezone.utc)
                 if reset:
                     logger.warning("The --reset option has no effect when running a backfill")
-                import_data({"geo_lookup": geo_lookup}, False, processing_date)
+                import_data(data_lookup, False, processing_date)
 
             logger.debug("Generating stats")
-            generate_stats(geo_lookup, customer_lookup, processing_date)
+            generate_stats(data_lookup, processing_date)
             logger.info("Import finished")
         except Exception as e:
             logging.error("Failed to import data", extra={"error": str(e), "trace": traceback.format_exc()})

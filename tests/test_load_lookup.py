@@ -1,18 +1,18 @@
 import pytest
 
-from ixp_tracker.management.commands.ixp_tracker_import import DefaultASNGeoLookup, load_lookup
+from ixp_tracker.management.commands.ixp_tracker_import import DefaultAdditionalDataSources, load_lookup
 
 
 def test_with_no_name_returns_none():
-    geo_lookup = load_lookup(None)
+    data_lookup = load_lookup(None)
 
-    assert geo_lookup is None
+    assert data_lookup is None
 
 
 def test_with_empty_name_returns_none():
-    geo_lookup = load_lookup("")
+    data_lookup = load_lookup("")
 
-    assert geo_lookup is None
+    assert data_lookup is None
 
 
 def test_with_invalid_module():
@@ -26,6 +26,6 @@ def test_with_invalid_factory():
 
 
 def test_loads_lookup():
-    geo_lookup = load_lookup("django_test_app.factory.return_geo_lookup")
+    data_lookup = load_lookup("django_test_app.factory.return_data_lookup")
 
-    assert isinstance(geo_lookup, DefaultASNGeoLookup)
+    assert isinstance(data_lookup, DefaultAdditionalDataSources)
