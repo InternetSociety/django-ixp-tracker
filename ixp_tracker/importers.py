@@ -146,6 +146,7 @@ def process_asn_data(geo_lookup):
                         "name": asn_data["name"],
                         "number": asn,
                         "network_type": asn_data["info_type"],
+                        "peering_policy": asn_data["policy_general"],
                         "registration_country_code": geo_lookup.get_iso2_country(asn, last_updated),
                         "created": asn_data["created"],
                         "last_updated": last_updated,

@@ -23,25 +23,38 @@ class IXP(models.Model):
         verbose_name_plural = _("Internet Exchange Points")
 
         constraints = [
-            models.UniqueConstraint(fields=['peeringdb_id'], name='ixp_tracker_unique_ixp_peeringdb_id')
+            models.UniqueConstraint(fields=["peeringdb_id"], name="ixp_tracker_unique_ixp_peeringdb_id")
         ]
 
 
 class ASN(models.Model):
     NETWORK_TYPE_CHOICES = [
-        ('access', 'Access'),
-        ('transit', 'Transit'),
-        ('content', 'Content'),
-        ('enterprise', 'Enterprise'),
-        ('NREN', 'Research and Education'),
-        ('non-profit', 'Non-profit'),
-        ('not-disclosed', 'Not Disclosed'),
-        ('other', 'Other'),
+        ("nsp", "NSP"),
+        ("content", "Content"),
+        ("cable-dsl-isp", "Cable/DSL/ISP"),
+        ("enterprise", "Enterprise"),
+        ("education-research", "Educational/Research"),
+        ("non-profit", "Non-Profit"),
+        ("route-server", "Route Server"),
+        ("network-services", "Network Services"),
+        ("route-collector", "Route Collector"),
+        ("government", "Government"),
+        ("not-disclosed", "Not Disclosed"),
+        ("other", "Other"),
+        ("unknown", "Unknown"),
+    ]
+    PEERING_POLICY_CHOICES = [
+        ("open", "Open"), 
+        ("selective", "Selective"), 
+        ("restrictive", "Restrictive"), 
+        ("no", "No"),
+        ("unknown", "Unknown"),
     ]
     name = models.CharField(max_length=500)
     number = models.IntegerField()
     peeringdb_id = models.IntegerField(null=True)
-    network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default='not-disclosed')
+    network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default="unknown")
+    peering_policy = models.CharField(max_length=50, choices=PEERING_POLICY_CHOICES, default="unknown")
     registration_country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -54,7 +67,7 @@ class ASN(models.Model):
         verbose_name_plural = "AS Numbers"
 
         constraints = [
-            models.UniqueConstraint(fields=['number'], name='ixp_tracker_unique_as_number')
+            models.UniqueConstraint(fields=["number"], name="ixp_tracker_unique_as_number")
         ]
 
 
@@ -72,7 +85,7 @@ class IXPMember(models.Model):
         verbose_name_plural = "IXP Members"
 
         constraints = [
-            models.UniqueConstraint(fields=['ixp', 'asn'], name='ixp_tracker_unique_ixp_membership')
+            models.UniqueConstraint(fields=["ixp", "asn"], name="ixp_tracker_unique_ixp_membership")
         ]
 
 
@@ -112,7 +125,7 @@ class StatsPerIXP(models.Model):
         verbose_name = "IXP stats"
 
         constraints = [
-            models.UniqueConstraint(fields=['ixp', 'stats_date'], name='ixp_tracker_unique_ixp_stats')
+            models.UniqueConstraint(fields=["ixp", "stats_date"], name="ixp_tracker_unique_ixp_stats")
         ]
 
 class StatsPerCountry(models.Model):
@@ -134,5 +147,5 @@ class StatsPerCountry(models.Model):
         verbose_name = "Per-country stats"
 
         constraints = [
-            models.UniqueConstraint(fields=['country_code', 'stats_date'], name='ixp_tracker_unique_per_country_stats')
+            models.UniqueConstraint(fields=["country_code", "stats_date"], name="ixp_tracker_unique_per_country_stats")
         ]

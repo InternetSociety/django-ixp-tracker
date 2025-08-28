@@ -40,6 +40,7 @@ class ASNFactory(factory.django.DjangoModelFactory):
     number = factory.Faker("random_number", digits=5)
     peeringdb_id = factory.Faker("random_number", digits=3)
     network_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
+    peering_policy = factory.Faker("random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES])
     registration_country_code = factory.Faker("country_code")
     created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
     last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
@@ -88,6 +89,7 @@ class PeeringASNFactory(factory.DictFactory):
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
     info_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
+    policy_general = factory.Faker("random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES])
     created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
     updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
