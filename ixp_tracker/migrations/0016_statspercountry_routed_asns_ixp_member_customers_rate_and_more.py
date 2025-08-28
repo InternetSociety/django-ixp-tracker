@@ -34,4 +34,14 @@ class Migration(migrations.Migration):
             field=models.FloatField(default=0),
             preserve_default=False,
         ),
+        migrations.AddField(
+            model_name='asn',
+            name='peering_policy',
+            field=models.CharField(choices=[('open', 'Open'), ('selective', 'Selective'), ('restrictive', 'Restrictive'), ('no', 'No'), ('unknown', 'Unknown')], default='unknown', max_length=50),
+        ),
+        migrations.AlterField(
+            model_name='asn',
+            name='network_type',
+            field=models.CharField(choices=[('nsp', 'NSP'), ('content', 'Content'), ('cable-dsl-isp', 'Cable/DSL/ISP'), ('enterprise', 'Enterprise'), ('education-research', 'Educational/Research'), ('non-profit', 'Non-Profit'), ('route-server', 'Route Server'), ('network-services', 'Network Services'), ('route-collector', 'Route Collector'), ('government', 'Government'), ('not-disclosed', 'Not Disclosed'), ('other', 'Other'), ('unknown', 'Unknown')], default='unknown', max_length=200),
+        ),
     ]
