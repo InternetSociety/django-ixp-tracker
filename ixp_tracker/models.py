@@ -10,6 +10,7 @@ class IXP(models.Model):
     active_status = models.BooleanField(default=True)
     manrs_participant = models.BooleanField(default=False)
     peeringdb_id = models.IntegerField(null=True)
+    org_id = models.IntegerField(null=True)
     country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
