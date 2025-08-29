@@ -116,6 +116,7 @@ def process_ixp_data(processing_date: datetime, manrs_lookup: MANRSParticipantsL
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
                         "manrs_participant": ixp_data["id"] in manrs_lookup.get_manrs_participants(processing_date),
+                        "org_id": ixp_data["org_id"],
                     }
                 )
                 logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})
