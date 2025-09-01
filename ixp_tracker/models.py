@@ -45,9 +45,9 @@ class ASN(models.Model):
         ("unknown", "Unknown"),
     ]
     PEERING_POLICY_CHOICES = [
-        ("open", "Open"), 
-        ("selective", "Selective"), 
-        ("restrictive", "Restrictive"), 
+        ("open", "Open"),
+        ("selective", "Selective"),
+        ("restrictive", "Restrictive"),
         ("no", "No"),
         ("unknown", "Unknown"),
     ]

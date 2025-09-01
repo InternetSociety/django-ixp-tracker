@@ -27,7 +27,7 @@ pip install django-ixp-tracker
 
 2. Run `python manage.py migrate` to create the models.
 3. Add the relevant settings to your config. `IXP_TRACKER_PEERING_DB_URL` will use a default if you don't provide a value so you probably don't need that. But you will need to set `IXP_TRACKER_PEERING_DB_KEY` to authenticate against the API.
-4. Add `IXP_TRACKER_GEO_LOOKUP_FACTORY` to config with the path to your factory (see below).
+4. Add `IXP_TRACKER_DATA_LOOKUP_FACTORY` to config with the path to your factory (see below).
 5. Run the management command to import the data: `python manage.py ixp_tracker_import` (This will sync the current data, if you want historical data you need to backfill first)
 
 ## ASN country and status data
@@ -36,7 +36,7 @@ The lib uses an external component to look up the country of registration (why?)
 
 If you don't provide this service yourself, it will default to a noop version. This will mean you will get no country of registration data and the marking of members having left an IXP will not be as efficient.
 
-In order to implement such a component yourself, you should implement the Protocol `ixp_tracker.importers.ASNGeoLookup` and provide a factory function for your class.
+In order to implement such a component yourself, you should implement the Protocol `ixp_tracker.data_lookup.AdditionalDataSources` and provide a factory function for your class.
 
 ## Backfilling data
 
@@ -54,7 +54,7 @@ The import process also generates monthly stats per IXP and per country. These a
 
 ## Running programmatically
 
-If you'd like to run the import from code, rather than from the management command, you can call `importers.import_data()` directly.
+If you'd like to run the import from code, rather than from the management command, you can call `importers.import_data()` and `stats.generate_stats()` directly.
 
 It's not recommended to call any other functions yourself.
 
@@ -63,8 +63,8 @@ It's not recommended to call any other functions yourself.
 To contribute to this library, first checkout the code. Then create a new virtual environment:
 ```bash
 cd django-ixp-tracker
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 ```
 Now install the dependencies and test dependencies:
 ```bash
@@ -79,6 +79,14 @@ We use [pre-commit](https://pre-commit.com/) for linting etc on push. Run:
 pre-commit install
 ```
 from the repo top-level dir to set it up.
+
+## Releases
+
+For now, releasing a new version is manual and can be done by running the following commands from the repo:
+```bash
+python -m build
+python -m twine upload --repository pypi dist/*
+```
 
 ## Peering Db libraries
 

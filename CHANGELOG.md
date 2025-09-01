@@ -2,6 +2,7 @@
 
 ## 1.0
 - implemented a single additional lookup, config values has changed from `IXP_TRACKER_GEO_LOOKUP_FACTORY` to `IXP_TRACKER_DATA_LOOKUP_FACTORY`
+- extra lookups have been added which will need to be implemented (even if as noops)
 - params for `import_data()` have changed, use `import_data(data_lookup_instance)` rather than `import_data(geo_lookup_instance)`
 - breaking change to `StatsPerIXP` where no fields are now nullable. Some fields are temporarily populated with zero so all stats should be regenerated.
 - remove support for Django < 5.2 and Python < 3.10
