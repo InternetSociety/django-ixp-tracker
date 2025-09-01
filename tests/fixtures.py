@@ -104,6 +104,7 @@ class PeeringIXFactory(factory.DictFactory):
     id = factory.Faker("random_number", digits=3)
     name = factory.LazyAttribute(lambda obj: f"{obj.city} - IX")
     name_long = factory.LazyAttribute(lambda obj: f"{obj.city} Internet Exchange Point")
+    org_id = factory.Faker("random_number", digits=3)
     city = factory.Faker("city")
     country = factory.Faker("country_code")
     website = factory.Faker("url", schemes=["https"])
