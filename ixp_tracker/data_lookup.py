@@ -33,13 +33,15 @@ class MANRSParticipantsLookup(Protocol):
         pass
 
 
+class ROAStateCounts(TypedDict):
+    valid: int
+    invalid: int
+    unknown: int
+
+
 class RPKIData(TypedDict):
-    roa_v4_valid: int
-    roa_v4_invalid: int
-    roa_v4_unknown: int
-    roa_v6_valid: int
-    roa_v6_invalid: int
-    roa_v6_unknown: int
+    v4: ROAStateCounts
+    v6: ROAStateCounts
 
 
 class RPKILookup(Protocol):
@@ -71,12 +73,16 @@ class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSPartici
 
     def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
         return {
-            "roa_v4_valid": 0,
-            "roa_v4_invalid": 0,
-            "roa_v4_unknown": 0,
-            "roa_v6_valid": 0,
-            "roa_v6_invalid": 0,
-            "roa_v6_unknown": 0,
+            "v4": {
+                "valid": 0,
+                "invalid": 0,
+                "unknown": 0,
+            },
+            "v6": {
+                "valid": 0,
+                "invalid": 0,
+                "unknown": 0,
+            },
         }
 
 

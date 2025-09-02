@@ -83,12 +83,16 @@ def test_handles_errors_with_source_data():
 def test_adds_rpki_data():
     asn_to_import = PeeringASNFactory()
     rpki_data = {
-        "roa_v4_valid": 3,
-        "roa_v4_invalid": 2,
-        "roa_v4_unknown": 1,
-        "roa_v6_valid": 7,
-        "roa_v6_invalid": 5,
-        "roa_v6_unknown": 4,
+        "v4": {
+            "valid": 3,
+            "invalid": 2,
+            "unknown": 1,
+        },
+        "v6": {
+            "valid": 7,
+            "invalid": 5,
+            "unknown": 4,
+        },
     }
     data_lookup = MockLookup(rpki_data=rpki_data)
 

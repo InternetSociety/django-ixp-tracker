@@ -185,10 +185,14 @@ class MockLookup(AdditionalDataSources):
 
     def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
         return self.rpki_data or {
-            "roa_v4_valid": 0,
-            "roa_v4_invalid": 0,
-            "roa_v4_unknown": 0,
-            "roa_v6_valid": 0,
-            "roa_v6_invalid": 0,
-            "roa_v6_unknown": 0,
+            "v4": {
+                "valid": 0,
+                "invalid": 0,
+                "unknown": 0,
+            },
+            "v6": {
+                "valid": 0,
+                "invalid": 0,
+                "unknown": 0,
+            },
         }
