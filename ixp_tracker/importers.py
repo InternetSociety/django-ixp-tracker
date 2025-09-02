@@ -28,7 +28,7 @@ def import_data(
         processing_date = datetime.now(timezone.utc)
         import_ixps(processing_date, additional_data)
         logger.debug("Imported IXPs")
-        import_asns(additional_data, reset, page_limit)
+        import_asns(processing_date, additional_data, reset, page_limit)
         logger.debug("Imported ASNs")
         import_members(processing_date, additional_data)
         logger.debug("Imported members")
@@ -57,7 +57,7 @@ def import_data(
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
         process_ixp_data(processing_date, additional_data)(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
-        process_asn_data(additional_data)(asn_data)
+        process_asn_data(processing_date, additional_data)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
         process_member_data(processing_date, additional_data)(member_data)
         toggle_ixp_active_status(processing_date)
@@ -125,22 +125,23 @@ def process_ixp_data(processing_date: datetime, manrs_lookup: MANRSParticipantsL
     return do_process_ixp_data
 
 
-def import_asns(geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200) -> bool:
+def import_asns(processing_date: datetime, data_lookup: AdditionalDataSources, reset: bool = False, page_limit: int = 200) -> bool:
     logger.debug("Fetching ASN data")
     updated_since = None
     if not reset:
         last_updated = models.ASN.objects.all().order_by("-last_updated").first()
         if last_updated:
             updated_since = last_updated.last_updated
-    return get_data("/net", process_asn_data(geo_lookup), limit=page_limit, last_updated=updated_since)
+    return get_data("/net", process_asn_data(processing_date, data_lookup), limit=page_limit, last_updated=updated_since)
 
 
-def process_asn_data(geo_lookup):
+def process_asn_data(processing_date: datetime, data_lookup: AdditionalDataSources):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
             try:
                 asn = int(asn_data["asn"])
                 last_updated = dateutil.parser.isoparse(asn_data["updated"])
+                rpki_summary = data_lookup.get_rpki_data(asn, processing_date)
                 models.ASN.objects.update_or_create(
                     peeringdb_id=asn_data["id"],
                     defaults={
@@ -148,7 +149,13 @@ def process_asn_data(geo_lookup):
                         "number": asn,
                         "network_type": asn_data["info_type"],
                         "peering_policy": asn_data["policy_general"],
-                        "registration_country_code": geo_lookup.get_iso2_country(asn, last_updated),
+                        "registration_country_code": data_lookup.get_iso2_country(asn, last_updated),
+                        "roa_v4_valid": rpki_summary["roa_v4_valid"],
+                        "roa_v4_invalid": rpki_summary["roa_v4_invalid"],
+                        "roa_v4_unknown": rpki_summary["roa_v4_unknown"],
+                        "roa_v6_valid": rpki_summary["roa_v6_valid"],
+                        "roa_v6_invalid": rpki_summary["roa_v6_invalid"],
+                        "roa_v6_unknown": rpki_summary["roa_v6_unknown"],
                         "created": asn_data["created"],
                         "last_updated": last_updated,
                     }

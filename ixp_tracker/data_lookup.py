@@ -1,7 +1,7 @@
 import importlib
 import logging
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -33,7 +33,22 @@ class MANRSParticipantsLookup(Protocol):
         pass
 
 
-class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup):
+class RPKIData(TypedDict):
+    roa_v4_valid: int
+    roa_v4_invalid: int
+    roa_v4_unknown: int
+    roa_v6_valid: int
+    roa_v6_invalid: int
+    roa_v6_unknown: int
+
+
+class RPKILookup(Protocol):
+
+    def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
+        pass
+
+
+class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, RPKILookup):
     pass
 
 
@@ -53,6 +68,16 @@ class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSPartici
 
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         return []
+
+    def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
+        return {
+            "roa_v4_valid": 0,
+            "roa_v4_invalid": 0,
+            "roa_v4_unknown": 0,
+            "roa_v6_valid": 0,
+            "roa_v6_invalid": 0,
+            "roa_v6_unknown": 0,
+        }
 
 
 def load_lookup(lookup_name):

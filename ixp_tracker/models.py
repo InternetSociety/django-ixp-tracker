@@ -57,6 +57,12 @@ class ASN(models.Model):
     network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default="unknown")
     peering_policy = models.CharField(max_length=50, choices=PEERING_POLICY_CHOICES, default="unknown")
     registration_country_code = models.CharField(max_length=2)
+    roa_v4_valid = models.IntegerField(default=0)
+    roa_v4_invalid = models.IntegerField(default=0)
+    roa_v4_unknown = models.IntegerField(default=0)
+    roa_v6_valid = models.IntegerField(default=0)
+    roa_v6_invalid = models.IntegerField(default=0)
+    roa_v6_unknown = models.IntegerField(default=0)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
 
