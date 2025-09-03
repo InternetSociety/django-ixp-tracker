@@ -82,7 +82,7 @@ def test_handles_errors_with_source_data():
 
 def test_adds_rpki_data():
     asn_to_import = PeeringASNFactory()
-    rpki_data = {
+    summary_by_roa = {
         "v4": {
             "valid": 3,
             "invalid": 2,
@@ -94,15 +94,27 @@ def test_adds_rpki_data():
             "unknown": 4,
         },
     }
+    summary_by_address = {
+        "v4": {
+            "valid": 31,
+            "invalid": 22,
+            "unknown": 16,
+        },
+        "v6": {
+            "valid": 78,
+            "invalid": 55,
+            "unknown": 40,
+        },
+    }
+    rpki_data = {
+        "by_roa": summary_by_roa,
+        "by_address": summary_by_address
+    }
     data_lookup = MockLookup(rpki_data=rpki_data)
 
     processor = importers.process_asn_data(processing_date, data_lookup)
     processor([asn_to_import])
 
     asn = ASN.objects.first()
-    assert asn.roa_v4_valid == 3
-    assert asn.roa_v4_invalid == 2
-    assert asn.roa_v4_unknown == 1
-    assert asn.roa_v6_valid == 7
-    assert asn.roa_v6_invalid == 5
-    assert asn.roa_v6_unknown == 4
+    assert asn.rpki_counts_by_roa == summary_by_roa
+    assert asn.rpki_counts_by_address == summary_by_address

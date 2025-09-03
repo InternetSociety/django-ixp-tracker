@@ -39,15 +39,48 @@ class ROAStateCounts(TypedDict):
     unknown: int
 
 
-class RPKIData(TypedDict):
+class RPKIAddressFamilyData(TypedDict):
     v4: ROAStateCounts
     v6: ROAStateCounts
+
+
+class RPKIData(TypedDict):
+    by_roa: RPKIAddressFamilyData
+    by_address: RPKIAddressFamilyData
 
 
 class RPKILookup(Protocol):
 
     def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
         pass
+
+
+DEFAULT_RPKI_SUMMARY_DATA = {
+    "by_roa": {
+        "v4": {
+            "valid": 0,
+            "invalid": 0,
+            "unknown": 0,
+        },
+        "v6": {
+            "valid": 0,
+            "invalid": 0,
+            "unknown": 0,
+        },
+    },
+    "by_address": {
+        "v4": {
+            "valid": 0,
+            "invalid": 0,
+            "unknown": 0,
+        },
+        "v6": {
+            "valid": 0,
+            "invalid": 0,
+            "unknown": 0,
+        },
+    }
+}
 
 
 class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, RPKILookup):
@@ -72,18 +105,7 @@ class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSPartici
         return []
 
     def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
-        return {
-            "v4": {
-                "valid": 0,
-                "invalid": 0,
-                "unknown": 0,
-            },
-            "v6": {
-                "valid": 0,
-                "invalid": 0,
-                "unknown": 0,
-            },
-        }
+        return DEFAULT_RPKI_SUMMARY_DATA
 
 
 def load_lookup(lookup_name):
