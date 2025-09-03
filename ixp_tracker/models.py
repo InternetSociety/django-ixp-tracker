@@ -57,6 +57,8 @@ class ASN(models.Model):
     network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default="unknown")
     peering_policy = models.CharField(max_length=50, choices=PEERING_POLICY_CHOICES, default="unknown")
     registration_country_code = models.CharField(max_length=2)
+    rpki_counts_by_roa = models.JSONField(default=dict)
+    rpki_counts_by_address = models.JSONField(default=dict)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
 

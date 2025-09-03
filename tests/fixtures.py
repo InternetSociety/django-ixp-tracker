@@ -4,6 +4,7 @@ from typing import TypedDict
 import factory
 from typing_extensions import NotRequired
 
+from ixp_tracker.data_lookup import DEFAULT_RPKI_SUMMARY_DATA, RPKIData
 from ixp_tracker.importers import AdditionalDataSources
 from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerIXP
 
@@ -42,6 +43,8 @@ class ASNFactory(factory.django.DjangoModelFactory):
     network_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
     peering_policy = factory.Faker("random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES])
     registration_country_code = factory.Faker("country_code")
+    rpki_counts_by_roa = DEFAULT_RPKI_SUMMARY_DATA["by_roa"]
+    rpki_counts_by_address = DEFAULT_RPKI_SUMMARY_DATA["by_address"]
     created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
     last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
 
@@ -151,14 +154,15 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
 
 class MockLookup(AdditionalDataSources):
 
-    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = []):
+    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = [], rpki_data: RPKIData = None):
         self.asns = asns
         self.routed_asns = routed_asns
         self.customer_asns = customer_asns
         self.manrs_participants = manrs_participants
+        self.rpki_data = rpki_data
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        pass
+        return "AU"
 
     def get_status(self, asn: int, as_at: datetime) -> str:
         pass
@@ -174,3 +178,6 @@ class MockLookup(AdditionalDataSources):
 
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         return self.manrs_participants
+
+    def get_rpki_data(self, asn: int, as_at: datetime) -> RPKIData:
+        return self.rpki_data or DEFAULT_RPKI_SUMMARY_DATA
