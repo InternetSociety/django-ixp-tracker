@@ -97,6 +97,8 @@ def import_ixps(processing_date, data_lookup: AdditionalDataSources) -> bool:
 
 def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSources):
     def do_process_ixp_data(all_ixp_data):
+        manrs_parrticipants = data_lookup.get_manrs_participants(processing_date)
+        anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
             if len(country_data) == 0:
@@ -115,8 +117,8 @@ def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSourc
                         "created": ixp_data["created"],
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
-                        "manrs_participant": ixp_data["id"] in data_lookup.get_manrs_participants(processing_date),
-                        "anchor_host": ixp_data["id"] in data_lookup.get_atlas_anchor_hosts(processing_date),
+                        "manrs_participant": ixp_data["id"] in manrs_parrticipants,
+                        "anchor_host": ixp_data["id"] in anchor_hosts,
                         "org_id": ixp_data["org_id"],
                     }
                 )
