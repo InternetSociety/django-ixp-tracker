@@ -4,7 +4,7 @@ from typing import TypedDict
 import factory
 from typing_extensions import NotRequired
 
-from ixp_tracker.importers import AdditionalDataSources
+from ixp_tracker.data_lookup import AdditionalDataSources
 from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerIXP
 
 
@@ -56,6 +56,7 @@ class IXPFactory(factory.django.DjangoModelFactory):
     website = factory.Faker("url", schemes=["https"])
     active_status = factory.Faker("pybool")
     manrs_participant = factory.Faker("pybool")
+    anchor_host = factory.Faker("pybool")
     peeringdb_id = factory.Faker("random_number", digits=3)
     org_id = factory.Faker("random_number", digits=3)
     country_code = factory.Faker("country_code")
@@ -151,11 +152,12 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
 
 class MockLookup(AdditionalDataSources):
 
-    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = []):
+    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = [], anchor_hosts: list[int] = []):
         self.asns = asns
         self.routed_asns = routed_asns
         self.customer_asns = customer_asns
         self.manrs_participants = manrs_participants
+        self.anchor_hosts = anchor_hosts
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
         pass
@@ -174,3 +176,6 @@ class MockLookup(AdditionalDataSources):
 
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         return self.manrs_participants
+
+    def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
+        return self.anchor_hosts

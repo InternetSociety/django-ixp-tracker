@@ -28,9 +28,10 @@ def test_imports_a_new_ixp():
 def test_updates_an_existing_ixp():
     new_data = PeeringIXFactory()
     manrs_participants = [new_data["id"]]
-    IXPFactory(peeringdb_id=new_data["id"], last_active=datetime(year=2024, month=4, day=1).replace(tzinfo=timezone.utc), manrs_participant=False)
+    anchor_hosts = [new_data["id"]]
+    IXPFactory(peeringdb_id=new_data["id"], last_active=datetime(year=2024, month=4, day=1).replace(tzinfo=timezone.utc), manrs_participant=False, anchor_host=False)
 
-    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(manrs_participants=manrs_participants))([new_data])
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(manrs_participants=manrs_participants, anchor_hosts=anchor_hosts))([new_data])
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1
@@ -38,6 +39,7 @@ def test_updates_an_existing_ixp():
     assert ixp.last_active.date() == datetime.now(timezone.utc).date()
     assert ixp.name == new_data["name"]
     assert ixp.manrs_participant
+    assert ixp.anchor_host
 
 
 def test_does_not_import_an_ixp_from_a_non_iso_country():
@@ -66,3 +68,12 @@ def test_saves_manrs_participant():
 
     ixp = IXP.objects.first()
     assert ixp.manrs_participant
+
+
+def test_saves_anchor_host():
+    new_data = PeeringIXFactory()
+    anchor_hosts = [new_data["id"]]
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(anchor_hosts=anchor_hosts))([new_data])
+
+    ixp = IXP.objects.first()
+    assert ixp.anchor_host

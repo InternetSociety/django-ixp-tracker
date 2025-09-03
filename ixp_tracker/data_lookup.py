@@ -33,11 +33,17 @@ class MANRSParticipantsLookup(Protocol):
         pass
 
 
-class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup):
+class AtlasAnchorHostLookup(Protocol):
+
+    def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
+        pass
+
+
+class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup):
     pass
 
 
-class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup):
+class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup):
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
         return "ZZ"
@@ -53,6 +59,10 @@ class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSPartici
 
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         return []
+    
+    def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
+        return []
+
 
 
 def load_lookup(lookup_name):
