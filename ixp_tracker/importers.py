@@ -12,7 +12,7 @@ from django_countries import countries
 
 from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
-from ixp_tracker.data_lookup import ASNGeoLookup, AdditionalDataSources, MANRSParticipantsLookup
+from ixp_tracker.data_lookup import ASNGeoLookup, AdditionalDataSources
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -91,12 +91,14 @@ def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: d
     return True
 
 
-def import_ixps(processing_date, manrs_lookup: MANRSParticipantsLookup) -> bool:
-    return get_data("/ix", process_ixp_data(processing_date, manrs_lookup))
+def import_ixps(processing_date, data_lookup: AdditionalDataSources) -> bool:
+    return get_data("/ix", process_ixp_data(processing_date, data_lookup))
 
 
-def process_ixp_data(processing_date: datetime, manrs_lookup: MANRSParticipantsLookup):
+def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSources):
     def do_process_ixp_data(all_ixp_data):
+        manrs_participants = data_lookup.get_manrs_participants(processing_date)
+        anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
             if len(country_data) == 0:
@@ -115,7 +117,8 @@ def process_ixp_data(processing_date: datetime, manrs_lookup: MANRSParticipantsL
                         "created": ixp_data["created"],
                         "last_updated": ixp_data["updated"],
                         "last_active": processing_date,
-                        "manrs_participant": ixp_data["id"] in manrs_lookup.get_manrs_participants(processing_date),
+                        "manrs_participant": ixp_data["id"] in manrs_participants,
+                        "anchor_host": ixp_data["id"] in anchor_hosts,
                         "org_id": ixp_data["org_id"],
                     }
                 )

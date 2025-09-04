@@ -66,3 +66,12 @@ def test_saves_manrs_participant():
 
     ixp = IXP.objects.first()
     assert ixp.manrs_participant
+
+
+def test_saves_anchor_host():
+    new_data = PeeringIXFactory()
+    anchor_hosts = [new_data["id"]]
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(anchor_hosts=anchor_hosts))([new_data])
+
+    ixp = IXP.objects.first()
+    assert ixp.anchor_host

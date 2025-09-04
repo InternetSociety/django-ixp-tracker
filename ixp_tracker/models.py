@@ -9,6 +9,7 @@ class IXP(models.Model):
     website = models.URLField(null=True)
     active_status = models.BooleanField(default=True)
     manrs_participant = models.BooleanField(default=False)
+    anchor_host = models.BooleanField(default=False)
     peeringdb_id = models.IntegerField(null=True)
     org_id = models.IntegerField(null=True)
     country_code = models.CharField(max_length=2)
