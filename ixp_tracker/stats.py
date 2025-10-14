@@ -23,6 +23,7 @@ class CountryStats(TypedDict):
 def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
     stats_date = stats_date or datetime.now(timezone.utc)
     stats_date = stats_date.replace(day=1)
+    date_now = datetime.now(timezone.utc)
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
     date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
@@ -109,6 +110,7 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
                 "members_left_last_12_months": len(members_left),
                 "monthly_members_change": growth_members,
                 "monthly_members_change_percent": (growth_members / members_last_month) if members_last_month > 0 else 1,
+                "last_generated": date_now,
             }
         )
         # Only aggregate this IXP's stats into the country stats if it's active
@@ -140,6 +142,7 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
                 "routed_asns_ixp_member_rate": local_routed_asns_members_rate,
                 "routed_asns_ixp_member_customers_rate": local_routed_asns_members_customers_rate,
                 "total_capacity": (country_stats["total_capacity"]/1000),
+                "last_generated": date_now,
             }
         )
 

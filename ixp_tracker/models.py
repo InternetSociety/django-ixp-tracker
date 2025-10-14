@@ -119,6 +119,7 @@ class StatsPerIXP(models.Model):
     members_left_last_12_months = models.IntegerField()
     monthly_members_change = models.IntegerField()
     monthly_members_change_percent = models.FloatField()
+    last_generated = models.DateTimeField()
 
     def __str__(self):
         return f"{self.ixp.name} - {self.stats_date}"
@@ -129,6 +130,7 @@ class StatsPerIXP(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["ixp", "stats_date"], name="ixp_tracker_unique_ixp_stats")
         ]
+
 
 class StatsPerCountry(models.Model):
     country_code = models.CharField(max_length=2)
@@ -141,6 +143,7 @@ class StatsPerCountry(models.Model):
     routed_asns_ixp_member_rate = models.FloatField()
     routed_asns_ixp_member_customers_rate = models.FloatField()
     total_capacity = models.FloatField()
+    last_generated = models.DateTimeField()
 
     def __str__(self):
         return f"{self.country_code}-{self.stats_date}-{self.asn_count}-{self.member_count}"

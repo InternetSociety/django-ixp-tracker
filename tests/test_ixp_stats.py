@@ -181,3 +181,21 @@ def test_saves_local_routed_asns_members_and_customers_rate():
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.local_routed_asns_members_customers_rate == 0.5
+
+
+def test_updates_existing_stats():
+    date_now = datetime.now(timezone.utc)
+    # Ensure stats_date and last_generated are always in the past so we can verify the updated last_generated
+    stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
+    last_generated = stats_date + timedelta(days=1)
+    ixp_one = IXPFactory()
+    create_member_fixture(ixp_one, quantity=2)
+    existing = StatsPerIXPFactory(stats_date=stats_date, ixp=ixp_one, members=1, last_generated=last_generated)
+
+    generate_stats(MockLookup(), stats_date)
+
+    all_stats_for_ixp = StatsPerIXP.objects.filter(ixp=ixp_one)
+    assert all_stats_for_ixp.count() == 1
+    ixp_stats = all_stats_for_ixp.first()
+    assert ixp_stats.last_generated > existing.last_generated
+    assert ixp_stats.members > existing.members

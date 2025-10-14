@@ -5,7 +5,7 @@ import factory
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
-from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerIXP
+from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 
 class MemberProperties(TypedDict):
@@ -148,6 +148,7 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     members_left_last_12_months = factory.Faker("random_number", digits=2)
     monthly_members_change = factory.Faker("random_number", digits=2)
     monthly_members_change_percent = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    last_generated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
 
 
 class MockLookup(AdditionalDataSources):
@@ -179,3 +180,20 @@ class MockLookup(AdditionalDataSources):
 
     def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
         return self.anchor_hosts
+
+
+class StatsPerCountryFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StatsPerCountry
+
+    country_code = factory.Faker("country_code")
+    stats_date = factory.Faker("date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    ixp_count = factory.Faker("random_int", max=200)
+    asn_count = factory.Faker("random_int", max=1000)
+    routed_asn_count = factory.Faker("random_int", max=800)
+    member_count = factory.Faker("random_int", max=500)
+    asns_ixp_member_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    routed_asns_ixp_member_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    routed_asns_ixp_member_customers_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    total_capacity = factory.Faker("random_number", digits=5)
+    last_generated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)

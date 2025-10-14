@@ -4,7 +4,7 @@ import pytest
 
 from ixp_tracker.models import StatsPerCountry
 from ixp_tracker.stats import generate_stats
-from tests.fixtures import ASNFactory, IXPFactory, MockLookup, create_member_fixture
+from tests.fixtures import ASNFactory, IXPFactory, MockLookup, StatsPerCountryFactory, create_member_fixture
 
 pytestmark = pytest.mark.django_db
 
@@ -77,3 +77,21 @@ def test_handles_invalid_country():
 
     country_stats = StatsPerCountry.objects.filter(country_code="XK").first()
     assert country_stats is None
+
+
+def test_updates_existing_stats_entry():
+    date_now = datetime.now(timezone.utc)
+    # Ensure stats_date and last_generated are always in the past so we can verify the updated last_generated
+    stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
+    last_generated = stats_date + timedelta(days=1)
+    existing = StatsPerCountryFactory(stats_date=stats_date, last_generated=last_generated)
+
+    generate_stats(MockLookup(), stats_date)
+
+    all_stats_for_country = StatsPerCountry.objects.filter(country_code=existing.country_code)
+    assert all_stats_for_country.count() == 1
+    country_stats = all_stats_for_country.first()
+    assert country_stats.last_generated > existing.last_generated
+    assert country_stats.ixp_count == 0
+    assert country_stats.asn_count == 0
+    assert country_stats.member_count == 0

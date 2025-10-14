@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1
+- always store the date stats are generated
+
 ## 1.0
 - implemented a single additional lookup, config values has changed from `IXP_TRACKER_GEO_LOOKUP_FACTORY` to `IXP_TRACKER_DATA_LOOKUP_FACTORY`
 - extra lookups have been added which will need to be implemented (even if as noops)
