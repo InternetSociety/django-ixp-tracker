@@ -2,11 +2,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List, TypedDict, Union
 
+from django.db.models.expressions import F
 from django_countries import countries
 from django.db.models import Q
 
 from ixp_tracker.importers import AdditionalDataSources, is_ixp_active
-from ixp_tracker.models import IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
+from ixp_tracker.models import IXP, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -27,16 +28,24 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
     date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
-    all_members = (IXPMember.objects
-                   .filter(
-                        Q(memberships__start_date__lte=stats_date) &
-                        (Q(memberships__end_date=None) | Q(memberships__end_date__gte=stats_date))
-                    )).all()
-    all_members_12_months_ago = (IXPMember.objects
-                   .filter(
-                        Q(memberships__start_date__lte=date_12_months_ago) &
-                        (Q(memberships__end_date=None) | Q(memberships__end_date__gte=date_12_months_ago))
-                    )).all()
+    all_memberships = (
+        IXPMembershipRecord.objects.select_related("member", "member__asn")
+           .filter(
+                Q(start_date__lte=stats_date) &
+                (Q(end_date=None) | Q(end_date__gte=stats_date))
+            )
+            .order_by(F("end_date").desc(nulls_first=True))
+            .all()
+    )
+    all_memberships_12_months_ago = (
+        IXPMembershipRecord.objects.select_related("member", "member__asn")
+           .filter(
+                Q(start_date__lte=date_12_months_ago) &
+                (Q(end_date=None) | Q(end_date__gte=date_12_months_ago))
+            )
+            .order_by(F("end_date").desc(nulls_first=True))
+            .all()
+    )
     all_stats_per_country: Dict[str, CountryStats] = {}
     for code, _ in list(countries):
         all_stats_per_country[code] = {
@@ -49,20 +58,22 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
         }
     for ixp in ixps:
         logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
-        members = [member for member in all_members if member.ixp == ixp]
-        members_12_months_ago = [member for member in all_members_12_months_ago if member.ixp == ixp]
+        members = [membership for membership in all_memberships if membership.member.ixp_id == ixp.id]
+        members_12_months_ago = [membership for membership in all_memberships_12_months_ago if membership.member.ixp_id == ixp.id]
         member_count = len(members)
         capacity = 0
         rs_peers = 0
-        for member in members:
-            # Make sure we get the relevant membership record for the stats_date
-            membership = (IXPMembershipRecord.objects
-                .filter(start_date__lte=stats_date, member=member)
-                .filter(Q(end_date=None) | Q(end_date__gte=stats_date))).first()
-            if membership is not None:
-                capacity += membership.speed
-                if membership.is_rs_peer:
-                    rs_peers += 1
+        members_counted = set()
+        for membership in members:
+            # There shouldn't be any duplicates but add this check just in case
+            if membership.member.id in members_counted:
+                logger.warning("Duplicate member found", extra={"member": membership.member})
+                member_count -= 1
+                continue
+            members_counted.add(membership.member.id)
+            capacity += membership.speed
+            if membership.is_rs_peer:
+                rs_peers += 1
         ixp_country = ixp.country_code
         country_stats = all_stats_per_country.get(ixp_country)
         if country_stats is None:
@@ -80,8 +91,8 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
             all_stats_per_country[ixp_country]["all_asns"] = lookup.get_asns_for_country(ixp_country, stats_date)
         if country_stats.get("routed_asns") is None:
             all_stats_per_country[ixp_country]["routed_asns"] = lookup.get_routed_asns_for_country(ixp_country, stats_date)
-        member_asns = [member.asn.number for member in members]
-        member_asns_12_months_ago = [member.asn.number for member in members_12_months_ago]
+        member_asns = [membership.member.asn.number for membership in members]
+        member_asns_12_months_ago = [membership.member.asn.number for membership in members_12_months_ago]
         members_left = [asn for asn in member_asns_12_months_ago if asn not in member_asns]
         members_joined = [asn for asn in member_asns if asn not in member_asns_12_months_ago]
         customer_asns = lookup.get_customer_asns(member_asns, stats_date)

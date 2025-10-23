@@ -188,8 +188,8 @@ def test_updates_existing_stats():
     # Ensure stats_date and last_generated are always in the past so we can verify the updated last_generated
     stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
     last_generated = stats_date + timedelta(days=1)
-    ixp_one = IXPFactory()
-    create_member_fixture(ixp_one, quantity=2)
+    ixp_one = IXPFactory(created=stats_date)
+    create_member_fixture(ixp_one, quantity=2, membership_properties={"start_date": stats_date})
     existing = StatsPerIXPFactory(stats_date=stats_date, ixp=ixp_one, members=1, last_generated=last_generated)
 
     generate_stats(MockLookup(), stats_date)

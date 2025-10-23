@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2
+- performance improvement to generating monthly stats
+
 ## 1.1
 - always store the date stats are generated
 
