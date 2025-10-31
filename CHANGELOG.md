@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3
+- add number of IXP physical locations to IXP objects
+
 ## 1.2
 - performance improvement to generating monthly stats
 
