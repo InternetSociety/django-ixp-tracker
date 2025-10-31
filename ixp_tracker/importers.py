@@ -1,18 +1,22 @@
 import ast
 import json
-from json.decoder import JSONDecodeError
 import logging
 from datetime import datetime, timedelta, timezone
+from json.decoder import JSONDecodeError
 from typing import Callable
 
-import requests
 import dateutil.parser
+import requests
 from django.db.models import Q
 from django_countries import countries
 
-from ixp_tracker.conf import IXP_TRACKER_PEERING_DB_KEY, IXP_TRACKER_PEERING_DB_URL, DATA_ARCHIVE_URL
 from ixp_tracker import models
-from ixp_tracker.data_lookup import ASNGeoLookup, AdditionalDataSources
+from ixp_tracker.conf import (
+    DATA_ARCHIVE_URL,
+    IXP_TRACKER_PEERING_DB_KEY,
+    IXP_TRACKER_PEERING_DB_URL,
+)
+from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -120,6 +124,7 @@ def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSourc
                         "manrs_participant": ixp_data["id"] in manrs_participants,
                         "anchor_host": ixp_data["id"] in anchor_hosts,
                         "org_id": ixp_data["org_id"],
+                        "physical_locations": ixp_data["fac_count"]
                     }
                 )
                 logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})
