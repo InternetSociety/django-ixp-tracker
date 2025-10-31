@@ -57,6 +57,7 @@ class IXPFactory(factory.django.DjangoModelFactory):
     active_status = factory.Faker("pybool")
     manrs_participant = factory.Faker("pybool")
     anchor_host = factory.Faker("pybool")
+    physical_locations = factory.Faker("random_number", digits=2)
     peeringdb_id = factory.Faker("random_number", digits=3)
     org_id = factory.Faker("random_number", digits=3)
     country_code = factory.Faker("country_code")
@@ -109,6 +110,7 @@ class PeeringIXFactory(factory.DictFactory):
     city = factory.Faker("city")
     country = factory.Faker("country_code")
     website = factory.Faker("url", schemes=["https"])
+    fac_count = factory.Faker("random_number", digits=2)
     created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
     updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
