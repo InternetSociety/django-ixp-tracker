@@ -37,6 +37,15 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
             .order_by(F("end_date").desc(nulls_first=True))
             .all()
     )
+    memberships_last_month = (
+        IXPMembershipRecord.objects.select_related("member", "member__asn")
+           .filter(
+                Q(start_date__lte=date_last_month) &
+                (Q(end_date=None) | Q(end_date__gte=date_last_month))
+            )
+            .order_by(F("end_date").desc(nulls_first=True))
+            .all()
+    )
     all_memberships_12_months_ago = (
         IXPMembershipRecord.objects.select_related("member", "member__asn")
            .filter(
@@ -59,6 +68,7 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
     for ixp in ixps:
         logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
         members = [membership for membership in all_memberships if membership.member.ixp_id == ixp.id]
+        num_members_last_month = len([membership for membership in memberships_last_month if membership.member.ixp_id == ixp.id])
         members_12_months_ago = [membership for membership in all_memberships_12_months_ago if membership.member.ixp_id == ixp.id]
         member_count = len(members)
         capacity = 0
@@ -101,9 +111,7 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
         local_routed_asns_members_rate = calculate_local_asns_members_rate(member_asns, all_stats_per_country[ixp_country]["routed_asns"])
         local_routed_asns_members_customers_rate = calculate_local_asns_members_rate(members_and_customers, all_stats_per_country[ixp_country]["routed_asns"])
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
-        stats_last_month = StatsPerIXP.objects.filter(ixp=ixp, stats_date=date_last_month.date()).first()
-        members_last_month = stats_last_month.members if stats_last_month else 0
-        growth_members = member_count - members_last_month
+        growth_members = member_count - num_members_last_month
         # We always save the stats per IXP so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         StatsPerIXP.objects.update_or_create(
             ixp=ixp,
@@ -120,7 +128,7 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
                 "members_joined_last_12_months": len(members_joined),
                 "members_left_last_12_months": len(members_left),
                 "monthly_members_change": growth_members,
-                "monthly_members_change_percent": (growth_members / members_last_month) if members_last_month > 0 else 1,
+                "monthly_members_change_percent": (growth_members / num_members_last_month) if num_members_last_month > 0 else 1,
                 "last_generated": date_now,
             }
         )

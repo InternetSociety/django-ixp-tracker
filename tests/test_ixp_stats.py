@@ -158,10 +158,8 @@ def test_adds_member_growth_stats():
     stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
     ixp = IXPFactory(created=stats_date)
     # Has 5 current members
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)}, quantity=5)
-    last_month = (stats_date - timedelta(days=1)).replace(day=1).date()
-    # Note the fixture would have had 5 members last month but we hardcode the stats to show only 4
-    StatsPerIXPFactory(ixp=ixp, members=4, stats_date=last_month)
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)}, quantity=4)
+    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2025, month=2, day=2)})
 
     generate_stats(MockLookup(), stats_date)
 

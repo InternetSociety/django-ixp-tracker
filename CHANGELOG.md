@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1
+- retrieve previous months members directly rather than relying on previous month's stats
+
 ## 1.3
 - add number of IXP physical locations to IXP objects
 
