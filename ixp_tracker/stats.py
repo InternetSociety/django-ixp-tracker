@@ -29,29 +29,32 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
     date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
     all_memberships = (
-        IXPMembershipRecord.objects.select_related("member", "member__asn")
+        IXPMembershipRecord.objects
            .filter(
                 Q(start_date__lte=stats_date) &
                 (Q(end_date=None) | Q(end_date__gte=stats_date))
             )
+            .values("member__ixp_id", "member__id", "speed", "is_rs_peer", "member__asn__number")
             .order_by(F("end_date").desc(nulls_first=True))
             .all()
     )
     memberships_last_month = (
-        IXPMembershipRecord.objects.select_related("member", "member__asn")
+        IXPMembershipRecord.objects
            .filter(
                 Q(start_date__lte=date_last_month) &
                 (Q(end_date=None) | Q(end_date__gte=date_last_month))
             )
+            .values("member__ixp_id", "member__id", "speed", "is_rs_peer", "member__asn__number")
             .order_by(F("end_date").desc(nulls_first=True))
             .all()
     )
     all_memberships_12_months_ago = (
-        IXPMembershipRecord.objects.select_related("member", "member__asn")
+        IXPMembershipRecord.objects
            .filter(
                 Q(start_date__lte=date_12_months_ago) &
                 (Q(end_date=None) | Q(end_date__gte=date_12_months_ago))
             )
+            .values("member__ixp_id", "member__id", "speed", "is_rs_peer", "member__asn__number")
             .order_by(F("end_date").desc(nulls_first=True))
             .all()
     )
@@ -67,22 +70,22 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
         }
     for ixp in ixps:
         logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
-        members = [membership for membership in all_memberships if membership.member.ixp_id == ixp.id]
-        num_members_last_month = len([membership for membership in memberships_last_month if membership.member.ixp_id == ixp.id])
-        members_12_months_ago = [membership for membership in all_memberships_12_months_ago if membership.member.ixp_id == ixp.id]
+        members = [membership for membership in all_memberships if membership["member__ixp_id"] == ixp.id]
+        num_members_last_month = len([membership for membership in memberships_last_month if membership["member__ixp_id"] == ixp.id])
+        members_12_months_ago = [membership for membership in all_memberships_12_months_ago if membership["member__ixp_id"] == ixp.id]
         member_count = len(members)
         capacity = 0
         rs_peers = 0
         members_counted = set()
         for membership in members:
             # There shouldn't be any duplicates but add this check just in case
-            if membership.member.id in members_counted:
-                logger.warning("Duplicate member found", extra={"member": membership.member})
+            if membership["member__id"] in members_counted:
+                logger.warning("Duplicate member found", extra={"member": membership["member__id"]})
                 member_count -= 1
                 continue
-            members_counted.add(membership.member.id)
-            capacity += membership.speed
-            if membership.is_rs_peer:
+            members_counted.add(membership["member__id"])
+            capacity += membership["speed"]
+            if membership["is_rs_peer"]:
                 rs_peers += 1
         ixp_country = ixp.country_code
         country_stats = all_stats_per_country.get(ixp_country)
@@ -101,8 +104,8 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
             all_stats_per_country[ixp_country]["all_asns"] = lookup.get_asns_for_country(ixp_country, stats_date)
         if country_stats.get("routed_asns") is None:
             all_stats_per_country[ixp_country]["routed_asns"] = lookup.get_routed_asns_for_country(ixp_country, stats_date)
-        member_asns = [membership.member.asn.number for membership in members]
-        member_asns_12_months_ago = [membership.member.asn.number for membership in members_12_months_ago]
+        member_asns = [membership["member__asn__number"] for membership in members]
+        member_asns_12_months_ago = [membership["member__asn__number"] for membership in members_12_months_ago]
         members_left = [asn for asn in member_asns_12_months_ago if asn not in member_asns]
         members_joined = [asn for asn in member_asns if asn not in member_asns_12_months_ago]
         customer_asns = lookup.get_customer_asns(member_asns, stats_date)

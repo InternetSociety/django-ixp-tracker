@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.2
+- another performance improvement to pull only the data needed for the stats generation
+
 ## 1.3.1
 - retrieve previous months members directly rather than relying on previous month's stats
 
