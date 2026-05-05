@@ -11,7 +11,7 @@ def test_member_growth_is_zero_returns_zero():
     assert gmp == 0.0
 
 
-def test_member_growth_is_calculated_correctly():
+def test_member_growth_percent_is_calculated_correctly():
     member_growth = randint(1, 100)
     num_members_last_month = randint(1, 100)
     gmp = calculate_growth_members_percent(member_growth, num_members_last_month)
