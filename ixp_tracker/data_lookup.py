@@ -7,7 +7,6 @@ logger = logging.getLogger("ixp_tracker")
 
 
 class ASNGeoLookup(Protocol):
-
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
         pass
 
@@ -22,29 +21,29 @@ class ASNGeoLookup(Protocol):
 
 
 class ASNCustomerLookup(Protocol):
-
     def get_customer_asns(self, asns: list[int], as_at: datetime) -> list[int]:
         pass
 
 
 class MANRSParticipantsLookup(Protocol):
-
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         pass
 
 
 class AtlasAnchorHostLookup(Protocol):
-
     def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
         pass
 
 
-class AdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup):
+class AdditionalDataSources(
+    ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup
+):
     pass
 
 
-class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup):
-
+class DefaultAdditionalDataSources(
+    ASNGeoLookup, ASNCustomerLookup, MANRSParticipantsLookup, AtlasAnchorHostLookup
+):
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
         return "ZZ"
 
@@ -54,15 +53,17 @@ class DefaultAdditionalDataSources(ASNGeoLookup, ASNCustomerLookup, MANRSPartici
     def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
         return []
 
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return []
+
     def get_customer_asns(self, asns: list[int], as_at: datetime) -> list[int]:
         return []
 
     def get_manrs_participants(self, as_at: datetime) -> list[int]:
         return []
-    
+
     def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
         return []
-
 
 
 def load_lookup(lookup_name):
@@ -70,7 +71,10 @@ def load_lookup(lookup_name):
         lookup_parts = lookup_name.split(".")
         factory_name = lookup_parts.pop()
         module_name = ".".join(lookup_parts)
-        logger.debug("Trying to load geo lookup", extra={"module_name": module_name, "factory": factory_name})
+        logger.debug(
+            "Trying to load geo lookup",
+            extra={"module_name": module_name, "factory": factory_name},
+        )
         if module_name and factory_name:
             imported_module = importlib.import_module(module_name)
             factory = getattr(imported_module, factory_name)
