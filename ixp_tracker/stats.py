@@ -150,14 +150,6 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
         )
         rs_peering_rate = rs_peers / member_count if rs_peers else 0
         growth_members = member_count - num_members_last_month
-        if not growth_members:
-            growth_members_percent = 0
-        else:
-            growth_members_percent = (
-                (growth_members / num_members_last_month)
-                if num_members_last_month > 0
-                else 1
-            )
         # We always save the stats per IXP so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         StatsPerIXP.objects.update_or_create(
             ixp=ixp,
@@ -174,7 +166,9 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
                 "members_joined_last_12_months": len(members_joined),
                 "members_left_last_12_months": len(members_left),
                 "monthly_members_change": growth_members,
-                "monthly_members_change_percent": growth_members_percent,
+                "monthly_members_change_percent": calculate_growth_members_percent(
+                    growth_members, num_members_last_month
+                ),
                 "last_generated": date_now,
             },
         )
@@ -220,6 +214,20 @@ def generate_stats(lookup: AdditionalDataSources, stats_date: datetime = None):
                 "last_generated": date_now,
             },
         )
+
+
+def calculate_growth_members_percent(
+    growth_members: int, num_members_last_month: int
+) -> float:
+    if not growth_members:
+        return 0.0
+    else:
+        growth_members_percent = (
+            (growth_members / num_members_last_month)
+            if num_members_last_month > 0
+            else 1.0
+        )
+    return growth_members_percent
 
 
 def calculate_local_asns_members_rate(
