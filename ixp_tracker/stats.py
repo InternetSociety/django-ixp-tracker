@@ -221,13 +221,9 @@ def calculate_growth_members_percent(
 ) -> float:
     if not growth_members:
         return 0.0
-    else:
-        growth_members_percent = (
-            (growth_members / num_members_last_month)
-            if num_members_last_month > 0
-            else 1.0
-        )
-    return growth_members_percent
+    elif not num_members_last_month:
+        return 1.0
+    return growth_members / num_members_last_month
 
 
 def calculate_local_asns_members_rate(
