@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.3
+- fixes bug in the calculation of monthly_members_change_percent
+
 ## 1.3.2
 - another performance improvement to pull only the data needed for the stats generation
 
