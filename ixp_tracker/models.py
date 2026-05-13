@@ -26,7 +26,9 @@ class IXP(models.Model):
         verbose_name_plural = _("Internet Exchange Points")
 
         constraints = [
-            models.UniqueConstraint(fields=["peeringdb_id"], name="ixp_tracker_unique_ixp_peeringdb_id")
+            models.UniqueConstraint(
+                fields=["peeringdb_id"], name="ixp_tracker_unique_ixp_peeringdb_id"
+            )
         ]
 
 
@@ -56,8 +58,12 @@ class ASN(models.Model):
     name = models.CharField(max_length=500)
     number = models.IntegerField()
     peeringdb_id = models.IntegerField(null=True)
-    network_type = models.CharField(max_length=200, choices=NETWORK_TYPE_CHOICES, default="unknown")
-    peering_policy = models.CharField(max_length=50, choices=PEERING_POLICY_CHOICES, default="unknown")
+    network_type = models.CharField(
+        max_length=200, choices=NETWORK_TYPE_CHOICES, default="unknown"
+    )
+    peering_policy = models.CharField(
+        max_length=50, choices=PEERING_POLICY_CHOICES, default="unknown"
+    )
     registration_country_code = models.CharField(max_length=2)
     created = models.DateTimeField()
     last_updated = models.DateTimeField()
@@ -70,7 +76,9 @@ class ASN(models.Model):
         verbose_name_plural = "AS Numbers"
 
         constraints = [
-            models.UniqueConstraint(fields=["number"], name="ixp_tracker_unique_as_number")
+            models.UniqueConstraint(
+                fields=["number"], name="ixp_tracker_unique_as_number"
+            )
         ]
 
 
@@ -88,19 +96,25 @@ class IXPMember(models.Model):
         verbose_name_plural = "IXP Members"
 
         constraints = [
-            models.UniqueConstraint(fields=["ixp", "asn"], name="ixp_tracker_unique_ixp_membership")
+            models.UniqueConstraint(
+                fields=["ixp", "asn"], name="ixp_tracker_unique_ixp_membership"
+            )
         ]
 
 
 class IXPMembershipRecord(models.Model):
-    member = models.ForeignKey(IXPMember, on_delete=models.CASCADE, related_name="memberships")
+    member = models.ForeignKey(
+        IXPMember, on_delete=models.CASCADE, related_name="memberships"
+    )
     start_date = models.DateField()
     is_rs_peer = models.BooleanField(default=False)
     speed = models.IntegerField(null=True)
     end_date = models.DateField(null=True)
 
     def __str__(self):
-        return f"Membership record {self.member} from {self.start_date} to {self.end_date}"
+        return (
+            f"Membership record {self.member} from {self.start_date} to {self.end_date}"
+        )
 
     class Meta:
         verbose_name = "IXP Membership record"
@@ -129,7 +143,9 @@ class StatsPerIXP(models.Model):
         verbose_name = "IXP stats"
 
         constraints = [
-            models.UniqueConstraint(fields=["ixp", "stats_date"], name="ixp_tracker_unique_ixp_stats")
+            models.UniqueConstraint(
+                fields=["ixp", "stats_date"], name="ixp_tracker_unique_ixp_stats"
+            )
         ]
 
 
@@ -153,5 +169,58 @@ class StatsPerCountry(models.Model):
         verbose_name = "Per-country stats"
 
         constraints = [
-            models.UniqueConstraint(fields=["country_code", "stats_date"], name="ixp_tracker_unique_per_country_stats")
+            models.UniqueConstraint(
+                fields=["country_code", "stats_date"],
+                name="ixp_tracker_unique_per_country_stats",
+            )
+        ]
+
+
+# Models for event sourcing
+
+
+class CannotChangeStoredEvent(Exception):
+    pass
+
+
+class StoredEvent(models.Model):
+    aggregate_id = models.UUIDField()
+    aggregate_type = models.TextField(blank=False)
+    event_date = models.DateTimeField(auto_now_add=True)
+    event_type = models.TextField(blank=False)
+    event_sequence = models.IntegerField()
+    data = models.JSONField()
+
+    def __str__(self):
+        return f"{self.aggregate_id}-{self.event_sequence}-{self.event_type}"
+
+    class Meta:
+        verbose_name = "Stored event"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id", "event_sequence"],
+                name="ixp_tracker_aggregate_sequence",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise CannotChangeStoredEvent
+        super().save(*args, **kwargs)
+
+
+class ISOCId(models.Model):
+    aggregate_id = models.UUIDField()
+
+    def __str__(self):
+        return f"{self.aggregate_id}, ISOC id: {self.id}"
+
+    class Meta:
+        verbose_name = "ISOC id mapping"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id"], name="ixp_tracker_aggregate_isoc_id"
+            )
         ]

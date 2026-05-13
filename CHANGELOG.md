@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- experimental event-sourced version
+
 ## 1.3.3
 - fixes bug in the calculation of monthly_members_change_percent
 

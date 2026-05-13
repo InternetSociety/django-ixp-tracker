@@ -15,18 +15,20 @@ from ixp_tracker.conf import (
     DATA_ARCHIVE_URL,
     IXP_TRACKER_PEERING_DB_KEY,
     IXP_TRACKER_PEERING_DB_URL,
+    IXP_TRACKER_ENABLE_EVENT_SOURCING,
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
+from ixp_tracker.event_store import EventStore
+from ixp_tracker.ixp_tracker import IXPTracker, ISOCIdProjection
 
 logger = logging.getLogger("ixp_tracker")
 
 
-
 def import_data(
-        additional_data: AdditionalDataSources,
-        reset: bool = False,
-        processing_date: datetime = None,
-        page_limit: int = 200
+    additional_data: AdditionalDataSources,
+    reset: bool = False,
+    processing_date: datetime = None,
+    page_limit: int = 200,
 ):
     if processing_date is None:
         processing_date = datetime.now(timezone.utc)
@@ -43,14 +45,20 @@ def import_data(
         processing_month = processing_date.month
         found = False
         while processing_date.month == processing_month and not found:
-            url = DATA_ARCHIVE_URL.format(year=processing_date.year, month=processing_date.month, day=processing_date.day)
+            url = DATA_ARCHIVE_URL.format(
+                year=processing_date.year,
+                month=processing_date.month,
+                day=processing_date.day,
+            )
             data = requests.get(url)
             if data.status_code == 200:
                 found = True
             else:
                 processing_date = processing_date + timedelta(days=1)
         if not found:
-            logger.warning("Cannot find backfill data", extra={"backfill_date": processing_date})
+            logger.warning(
+                "Cannot find backfill data", extra={"backfill_date": processing_date}
+            )
             return
         backfill_raw = data.text
         try:
@@ -68,7 +76,9 @@ def import_data(
         logger.debug("Toggled IXPs active status")
 
 
-def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: datetime = None) -> bool:
+def get_data(
+    endpoint: str, processor: Callable, limit: int = 0, last_updated: datetime = None
+) -> bool:
     url = f"{IXP_TRACKER_PEERING_DB_URL}{endpoint}"
     query_params = {}
     if last_updated is not None:
@@ -79,7 +89,11 @@ def get_data(endpoint: str, processor: Callable, limit: int = 0, last_updated: d
     finished = False
     while finished is not True:
         finished = True
-        data = requests.get(url, headers={"Authorization": f"Api-Key {IXP_TRACKER_PEERING_DB_KEY}"}, params=query_params)
+        data = requests.get(
+            url,
+            headers={"Authorization": f"Api-Key {IXP_TRACKER_PEERING_DB_KEY}"},
+            params=query_params,
+        )
         if data.status_code >= 300:
             logger.warning("Cannot retrieve data", extra={"status": data.status_code})
             return False
@@ -106,41 +120,64 @@ def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSourc
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
             if len(country_data) == 0:
-                logger.warning("Skipping IXP import as country code not found", extra={"country": ixp_data["country"], "id": ixp_data["id"]})
+                logger.warning(
+                    "Skipping IXP import as country code not found",
+                    extra={"country": ixp_data["country"], "id": ixp_data["id"]},
+                )
                 continue
             try:
-                models.IXP.objects.update_or_create(
-                    peeringdb_id=ixp_data["id"],
-                    defaults={
-                        "name": ixp_data["name"],
-                        "long_name": ixp_data["name_long"],
-                        "city": ixp_data["city"],
-                        "website": ixp_data["website"],
-                        "active_status": True,
-                        "country_code": ixp_data["country"],
-                        "created": ixp_data["created"],
-                        "last_updated": ixp_data["updated"],
-                        "last_active": processing_date,
-                        "manrs_participant": ixp_data["id"] in manrs_participants,
-                        "anchor_host": ixp_data["id"] in anchor_hosts,
-                        "org_id": ixp_data["org_id"],
-                        "physical_locations": ixp_data["fac_count"]
-                    }
-                )
+                if IXP_TRACKER_ENABLE_EVENT_SOURCING:
+                    app = IXPTracker(EventStore(), ISOCIdProjection())
+                    # Search for PDB id to see if we have this IXP already
+                    # If so update
+                    # Else
+                    _ixp = app.register_ixp(
+                        ixp_data["name"],
+                        ixp_data["name_long"],
+                        ixp_data["city"],
+                        ixp_data["id"],
+                    )
+                else:
+                    models.IXP.objects.update_or_create(
+                        peeringdb_id=ixp_data["id"],
+                        defaults={
+                            "name": ixp_data["name"],
+                            "long_name": ixp_data["name_long"],
+                            "city": ixp_data["city"],
+                            "website": ixp_data["website"],
+                            "active_status": True,
+                            "country_code": ixp_data["country"],
+                            "created": ixp_data["created"],
+                            "last_updated": ixp_data["updated"],
+                            "last_active": processing_date,
+                            "manrs_participant": ixp_data["id"] in manrs_participants,
+                            "anchor_host": ixp_data["id"] in anchor_hosts,
+                            "org_id": ixp_data["org_id"],
+                            "physical_locations": ixp_data["fac_count"],
+                        },
+                    )
                 logger.debug("Creating new IXP record", extra={"id": ixp_data["id"]})
             except Exception as e:
                 logger.warning("Cannot import IXP data", extra={"error": str(e)})
+
     return do_process_ixp_data
 
 
-def import_asns(geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200) -> bool:
+def import_asns(
+    geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200
+) -> bool:
     logger.debug("Fetching ASN data")
     updated_since = None
     if not reset:
         last_updated = models.ASN.objects.all().order_by("-last_updated").first()
         if last_updated:
             updated_since = last_updated.last_updated
-    return get_data("/net", process_asn_data(geo_lookup), limit=page_limit, last_updated=updated_since)
+    return get_data(
+        "/net",
+        process_asn_data(geo_lookup),
+        limit=page_limit,
+        last_updated=updated_since,
+    )
 
 
 def process_asn_data(geo_lookup):
@@ -156,14 +193,17 @@ def process_asn_data(geo_lookup):
                         "number": asn,
                         "network_type": asn_data["info_type"],
                         "peering_policy": asn_data["policy_general"],
-                        "registration_country_code": geo_lookup.get_iso2_country(asn, last_updated),
+                        "registration_country_code": geo_lookup.get_iso2_country(
+                            asn, last_updated
+                        ),
                         "created": asn_data["created"],
                         "last_updated": last_updated,
-                    }
+                    },
                 )
             except Exception as e:
                 logger.warning("Cannot import ASN data", extra={"error": str(e)})
         return True
+
     return process_asn_paged_data
 
 
@@ -173,7 +213,6 @@ def import_members(processing_date: datetime, geo_lookup: ASNGeoLookup) -> bool:
 
 
 def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
-
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
         for member_data in all_member_data:
@@ -194,16 +233,20 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                 defaults={
                     "last_updated": member_data["updated"],
                     "last_active": processing_date,
-                }
+                },
             )
             created_date = dateutil.parser.isoparse(member_data["created"]).date()
-            membership = models.IXPMembershipRecord.objects.filter(member=member).order_by("-start_date").first()
+            membership = (
+                models.IXPMembershipRecord.objects.filter(member=member)
+                .order_by("-start_date")
+                .first()
+            )
             if created or membership is None:
                 membership = models.IXPMembershipRecord(
                     member=member,
                     start_date=created_date,
                     is_rs_peer=member_data["is_rs_peer"],
-                    speed=member_data["speed"]
+                    speed=member_data["speed"],
                 )
                 membership.save()
                 logger.debug("Created new membership for new member", extra=log_data)
@@ -225,38 +268,67 @@ def process_member_data(processing_date: datetime, geo_lookup: ASNGeoLookup):
                             member=member,
                             start_date=created_date,
                             is_rs_peer=member_data["is_rs_peer"],
-                            speed=member_data["speed"]
+                            speed=member_data["speed"],
                         )
-                        logger.debug("Created new membership as previous one ended", extra=log_data)
+                        logger.debug(
+                            "Created new membership as previous one ended",
+                            extra=log_data,
+                        )
                 membership.save()
 
             logger.debug("Imported IXP member record", extra=log_data)
-        start_of_month = processing_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_of_month = processing_date.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
         inactive = models.IXPMember.objects.filter(last_active__lt=start_of_month).all()
         for member in inactive:
-            latest_membership = models.IXPMembershipRecord.objects.filter(member=member).order_by("-start_date").first()
+            latest_membership = (
+                models.IXPMembershipRecord.objects.filter(member=member)
+                .order_by("-start_date")
+                .first()
+            )
             if latest_membership.end_date is not None:
                 continue
-            start_of_next_of_month = (member.last_active.replace(day=1) + timedelta(days=33)).replace(day=1)
+            start_of_next_of_month = (
+                member.last_active.replace(day=1) + timedelta(days=33)
+            ).replace(day=1)
             end_of_month = start_of_next_of_month - timedelta(days=1)
             latest_membership.end_date = end_of_month
             latest_membership.save()
-            logger.debug("Member flagged as left due to inactivity", extra={"member": member.asn.number})
-        candidates = models.IXPMember.objects.filter(asn__registration_country_code="ZZ").all()
+            logger.debug(
+                "Member flagged as left due to inactivity",
+                extra={"member": member.asn.number},
+            )
+        candidates = models.IXPMember.objects.filter(
+            asn__registration_country_code="ZZ"
+        ).all()
         for candidate in candidates:
-            latest_membership = models.IXPMembershipRecord.objects.filter(member=candidate).order_by("-start_date").first()
+            latest_membership = (
+                models.IXPMembershipRecord.objects.filter(member=candidate)
+                .order_by("-start_date")
+                .first()
+            )
             if latest_membership.end_date is not None:
                 continue
-            if geo_lookup.get_status(candidate.asn.number, processing_date) != "assigned":
-                end_of_last_month_active = (candidate.last_active.replace(day=1) - timedelta(days=1))
+            if (
+                geo_lookup.get_status(candidate.asn.number, processing_date)
+                != "assigned"
+            ):
+                end_of_last_month_active = candidate.last_active.replace(
+                    day=1
+                ) - timedelta(days=1)
                 if end_of_last_month_active.date() < latest_membership.start_date:
                     # It can happen that a member is immediately marked as left as the AS is not registered to a country
                     # In this case make sure the date we are using for the membership end date is not before the start_date
                     end_of_last_month_active = latest_membership.start_date
                 latest_membership.end_date = end_of_last_month_active
                 latest_membership.save()
-                logger.debug("Member flagged as left due to unassigned ASN", extra={"member": candidate.asn.number})
+                logger.debug(
+                    "Member flagged as left due to unassigned ASN",
+                    extra={"member": candidate.asn.number},
+                )
         logger.info("Fixing members finished")
+
     return do_process_member_data
 
 
@@ -267,17 +339,18 @@ def dedupe_member_data(raw_members_data):
         if deduped_data.get(member_key) is None:
             deduped_data[member_key] = dict(raw_member)
         else:
-            deduped_data[member_key]["is_rs_peer"] = deduped_data[member_key]["is_rs_peer"] or raw_member["is_rs_peer"]
+            deduped_data[member_key]["is_rs_peer"] = (
+                deduped_data[member_key]["is_rs_peer"] or raw_member["is_rs_peer"]
+            )
             deduped_data[member_key]["speed"] += raw_member["speed"]
     return list(deduped_data.values())
 
 
 def toggle_ixp_active_status(processing_date: datetime):
     for ixp in models.IXP.objects.all():
-        active_members = (models.IXPMembershipRecord.objects
-                          .filter(member__in=ixp.ixpmember_set.all())
-                          .filter(Q(end_date__isnull=True) | Q(end_date__gte=processing_date))
-        )
+        active_members = models.IXPMembershipRecord.objects.filter(
+            member__in=ixp.ixpmember_set.all()
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=processing_date))
         # Note that `last_active` is the date we last saw the IXP in the source data and is used to track deletions
         # We update `last_updated` here when we toggle the active status as we use that to signify our IXP record has been changed
         # even though usually `last_updated` is taken from the source data field of the same name

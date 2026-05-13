@@ -5,7 +5,15 @@ import factory
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
-from ixp_tracker.models import ASN, IXP, IXPMember, IXPMembershipRecord, StatsPerCountry, StatsPerIXP
+from ixp_tracker.models import (
+    ASN,
+    IXP,
+    IXPMember,
+    IXPMembershipRecord,
+    StatsPerCountry,
+    StatsPerIXP,
+    StoredEvent,
+)
 
 
 class MemberProperties(TypedDict):
@@ -19,7 +27,13 @@ class MembershipProperties(TypedDict):
     is_rs_peer: NotRequired[bool]
 
 
-def create_member_fixture(ixp, asn = None, quantity = 1, membership_properties: MembershipProperties = None, member_properties: MemberProperties = None):
+def create_member_fixture(
+    ixp,
+    asn=None,
+    quantity=1,
+    membership_properties: MembershipProperties = None,
+    member_properties: MemberProperties = None,
+):
     created = 0
     member = None
     member_properties = member_properties or {}
@@ -39,11 +53,19 @@ class ASNFactory(factory.django.DjangoModelFactory):
     name = factory.Faker("nic_handle", suffix="FAKE")
     number = factory.Faker("random_number", digits=5)
     peeringdb_id = factory.Faker("random_number", digits=3)
-    network_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
-    peering_policy = factory.Faker("random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES])
+    network_type = factory.Faker(
+        "random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES]
+    )
+    peering_policy = factory.Faker(
+        "random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES]
+    )
     registration_country_code = factory.Faker("country_code")
-    created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
-    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    created = factory.Faker(
+        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
+    last_updated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
 
 
 class IXPFactory(factory.django.DjangoModelFactory):
@@ -61,9 +83,15 @@ class IXPFactory(factory.django.DjangoModelFactory):
     peeringdb_id = factory.Faker("random_number", digits=3)
     org_id = factory.Faker("random_number", digits=3)
     country_code = factory.Faker("country_code")
-    created = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
-    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
-    last_active = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    created = factory.Faker(
+        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
+    last_updated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
+    last_active = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
 
 
 class IXPMemberFactory(factory.django.DjangoModelFactory):
@@ -72,8 +100,12 @@ class IXPMemberFactory(factory.django.DjangoModelFactory):
 
     ixp = None
     asn = None
-    last_updated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
-    last_active = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    last_updated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
+    last_active = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
 
 
 class IXPMembershipRecordFactory(factory.django.DjangoModelFactory):
@@ -81,7 +113,9 @@ class IXPMembershipRecordFactory(factory.django.DjangoModelFactory):
         model = IXPMembershipRecord
 
     member = None
-    start_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    start_date = factory.Faker(
+        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
     is_rs_peer = factory.Faker("pybool")
     speed = factory.Faker("random_number", digits=6)
     end_date = None
@@ -91,15 +125,26 @@ class PeeringASNFactory(factory.DictFactory):
     id = factory.Faker("random_number", digits=3)
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
-    info_type = factory.Faker("random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES])
-    policy_general = factory.Faker("random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES])
-    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
-
+    info_type = factory.Faker(
+        "random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES]
+    )
+    policy_general = factory.Faker(
+        "random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES]
+    )
+    created = factory.LazyAttribute(
+        lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    updated = factory.LazyAttribute(
+        lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
 
     class Params:
-        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
-        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+        created_date = factory.Faker(
+            "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+        )
+        updated_date = factory.Faker(
+            "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+        )
 
 
 class PeeringIXFactory(factory.DictFactory):
@@ -111,27 +156,41 @@ class PeeringIXFactory(factory.DictFactory):
     country = factory.Faker("country_code")
     website = factory.Faker("url", schemes=["https"])
     fac_count = factory.Faker("random_number", digits=2)
-    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
-
+    created = factory.LazyAttribute(
+        lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    updated = factory.LazyAttribute(
+        lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
 
     class Params:
-        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
-        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+        created_date = factory.Faker(
+            "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+        )
+        updated_date = factory.Faker(
+            "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+        )
 
 
 class PeeringNetIXLANFactory(factory.DictFactory):
     asn = factory.Faker("random_number", digits=5)
     ix_id = factory.Faker("random_number", digits=3)
-    created = factory.LazyAttribute(lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    updated = factory.LazyAttribute(lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    created = factory.LazyAttribute(
+        lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    updated = factory.LazyAttribute(
+        lambda obj: obj.updated_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
     is_rs_peer = factory.Faker("pybool")
     speed = factory.Faker("random_number", digits=6)
 
-
     class Params:
-        created_date = factory.Faker("date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
-        updated_date = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+        created_date = factory.Faker(
+            "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+        )
+        updated_date = factory.Faker(
+            "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+        )
 
 
 class StatsPerIXPFactory(factory.django.DjangoModelFactory):
@@ -139,23 +198,43 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
         model = StatsPerIXP
 
     ixp = None
-    stats_date = factory.Faker("date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    stats_date = factory.Faker(
+        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
     capacity = factory.Faker("random_number", digits=5)
     members = factory.Faker("random_number", digits=3)
-    local_asns_members_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    local_routed_asns_members_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    local_routed_asns_members_customers_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    rs_peering_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    local_asns_members_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    local_routed_asns_members_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    local_routed_asns_members_customers_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    rs_peering_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
     members_joined_last_12_months = factory.Faker("random_number", digits=2)
     members_left_last_12_months = factory.Faker("random_number", digits=2)
     monthly_members_change = factory.Faker("random_number", digits=2)
-    monthly_members_change_percent = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    last_generated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    monthly_members_change_percent = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    last_generated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
 
 
 class MockLookup(AdditionalDataSources):
-
-    def __init__(self, asns: list[int] = [], routed_asns: list[int] = [], customer_asns: list[int] = [], manrs_participants: list[int] = [], anchor_hosts: list[int] = []):
+    def __init__(
+        self,
+        asns: list[int] = [],
+        routed_asns: list[int] = [],
+        customer_asns: list[int] = [],
+        manrs_participants: list[int] = [],
+        anchor_hosts: list[int] = [],
+    ):
         self.asns = asns
         self.routed_asns = routed_asns
         self.customer_asns = customer_asns
@@ -189,13 +268,40 @@ class StatsPerCountryFactory(factory.django.DjangoModelFactory):
         model = StatsPerCountry
 
     country_code = factory.Faker("country_code")
-    stats_date = factory.Faker("date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc)
+    stats_date = factory.Faker(
+        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
     ixp_count = factory.Faker("random_int", max=200)
     asn_count = factory.Faker("random_int", max=1000)
     routed_asn_count = factory.Faker("random_int", max=800)
     member_count = factory.Faker("random_int", max=500)
-    asns_ixp_member_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    routed_asns_ixp_member_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
-    routed_asns_ixp_member_customers_rate = factory.Faker("pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1)
+    asns_ixp_member_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    routed_asns_ixp_member_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    routed_asns_ixp_member_customers_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
     total_capacity = factory.Faker("random_number", digits=5)
-    last_generated = factory.Faker("date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc)
+    last_generated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
+
+
+# Fixtures for event sourcing
+
+
+class StoredEventFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StoredEvent
+
+    aggregate_id = factory.Faker("uuid4")
+    aggregate_type = factory.Faker("word")
+    event_date = factory.Faker(
+        "date_time_between", start_date="-1d", tzinfo=timezone.utc
+    )
+    event_type = factory.Faker("word")
+    event_sequence = factory.Faker("random_int", max=200)
+    data = {}
