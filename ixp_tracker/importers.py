@@ -19,7 +19,11 @@ from ixp_tracker.conf import (
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import EventStore
-from ixp_tracker.ixp_tracker import IXPTracker, ISOCIdProjection
+from ixp_tracker.ixp_tracker import (
+    IXPTracker,
+    IXPIdMapProjection,
+    IXP_TRACKER_EVENT_MAP,
+)
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -110,10 +114,19 @@ def get_data(
 
 
 def import_ixps(processing_date, data_lookup: AdditionalDataSources) -> bool:
-    return get_data("/ix", process_ixp_data(processing_date, data_lookup))
+    return get_data(
+        "/ix",
+        process_ixp_data(
+            processing_date, data_lookup, IXP_TRACKER_ENABLE_EVENT_SOURCING
+        ),
+    )
 
 
-def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSources):
+def process_ixp_data(
+    processing_date: datetime,
+    data_lookup: AdditionalDataSources,
+    enable_event_sourcing: bool = False,
+):
     def do_process_ixp_data(all_ixp_data):
         manrs_participants = data_lookup.get_manrs_participants(processing_date)
         anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
@@ -126,17 +139,37 @@ def process_ixp_data(processing_date: datetime, data_lookup: AdditionalDataSourc
                 )
                 continue
             try:
-                if IXP_TRACKER_ENABLE_EVENT_SOURCING:
-                    app = IXPTracker(EventStore(), ISOCIdProjection())
-                    # Search for PDB id to see if we have this IXP already
-                    # If so update
-                    # Else
-                    _ixp = app.register_ixp(
-                        ixp_data["name"],
-                        ixp_data["name_long"],
-                        ixp_data["city"],
-                        ixp_data["id"],
-                    )
+                if enable_event_sourcing:
+                    id_maps = IXPIdMapProjection()
+                    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), id_maps)
+                    peeringdb_id = int(ixp_data["id"])
+                    # If we set microsecond to 0 then str() doesn't output the microseconds so we set them to 1
+                    date_created = datetime.strptime(
+                        ixp_data["created"], "%Y-%m-%dT%H:%M:%SZ"
+                    ).replace(microsecond=1, tzinfo=timezone.utc)
+                    last_updated = datetime.strptime(
+                        ixp_data["updated"], "%Y-%m-%dT%H:%M:%SZ"
+                    ).replace(microsecond=1, tzinfo=timezone.utc)
+                    exists = id_maps.find_by_peeringdb_id(peeringdb_id)
+                    if exists:
+                        # If so update
+                        pass
+                    else:
+                        _ixp = app.register_ixp(
+                            ixp_data["name"],
+                            ixp_data["name_long"],
+                            ixp_data["city"],
+                            peeringdb_id,
+                            ixp_data["website"],
+                            ixp_data["country"],
+                            date_created,
+                            last_updated,
+                            processing_date,
+                            ixp_data["id"] in manrs_participants,
+                            ixp_data["id"] in anchor_hosts,
+                            int(ixp_data["org_id"]),
+                            int(ixp_data["fac_count"]),
+                        )
                 else:
                     models.IXP.objects.update_or_create(
                         peeringdb_id=ixp_data["id"],

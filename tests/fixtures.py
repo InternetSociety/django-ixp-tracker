@@ -1,10 +1,12 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TypedDict
+from typing import TypedDict, Optional
 
 import factory
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
+from ixp_tracker.event_store import Event, ValueNotChanged, Aggregate, Projection
 from ixp_tracker.models import (
     ASN,
     IXP,
@@ -13,6 +15,7 @@ from ixp_tracker.models import (
     StatsPerCountry,
     StatsPerIXP,
     StoredEvent,
+    IXPIdMap,
 )
 
 
@@ -305,3 +308,60 @@ class StoredEventFactory(factory.django.DjangoModelFactory):
     event_type = factory.Faker("word")
     event_sequence = factory.Faker("random_int", max=200)
     data = {}
+
+
+class IXPIdMapFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = IXPIdMap
+
+    aggregate_id = factory.Faker("uuid4")
+    peeringdb_id = None
+
+
+@dataclass
+class CreatedTestAggregate(Event):
+    foo: str
+
+
+@dataclass
+class TestAggregateUpdated(Event):
+    __test__ = False
+    foo: Optional[str] = ValueNotChanged()
+    bar: str = ValueNotChanged()
+
+
+TEST_EVENT_MAP = {
+    "CreatedTestAggregate": CreatedTestAggregate,
+    "TestAggregateUpdated": TestAggregateUpdated,
+}
+
+
+class TestAggregate(Aggregate):
+    __test__ = False
+    foo: str
+    bar: Optional[str] = None
+
+    def created(self, event: CreatedTestAggregate):
+        self.foo = event.foo
+
+    def updated(self, event: TestAggregateUpdated):
+        self.foo = event.foo if not isinstance(event.foo, ValueNotChanged) else self.foo
+        self.bar = event.bar if not isinstance(event.bar, ValueNotChanged) else self.bar
+
+
+class SecondAggregate(Aggregate):
+    foo: str
+
+    def created(self, event: CreatedTestAggregate):
+        self.foo = event.foo
+
+
+class TestProjection(Projection):
+    __test__ = False
+    aggregate_types = [TestAggregate.__name__]
+    events = [CreatedTestAggregate.__name__]
+
+    handled = False
+
+    def do_handle(self, event: StoredEvent):
+        self.handled = True

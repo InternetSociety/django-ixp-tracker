@@ -210,11 +210,12 @@ class StoredEvent(models.Model):
         super().save(*args, **kwargs)
 
 
-class ISOCId(models.Model):
+class IXPIdMap(models.Model):
     aggregate_id = models.UUIDField()
+    peeringdb_id = models.IntegerField(null=True)
 
     def __str__(self):
-        return f"{self.aggregate_id}, ISOC id: {self.id}"
+        return f"{self.aggregate_id}, ISOC id: {self.id}, PDB id: {self.peeringdb_id}"
 
     class Meta:
         verbose_name = "ISOC id mapping"
@@ -222,5 +223,8 @@ class ISOCId(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["aggregate_id"], name="ixp_tracker_aggregate_isoc_id"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["peeringdb_id"], name="ixp_tracker_aggregate_peeringdb_id"
+            ),
         ]
