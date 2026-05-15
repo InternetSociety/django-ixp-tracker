@@ -152,7 +152,21 @@ def process_ixp_data(
                     ).replace(microsecond=1, tzinfo=timezone.utc)
                     exists = id_maps.find_by_peeringdb_id(peeringdb_id)
                     if exists:
-                        # If so update
+                        _ixp = app.update_ixp(
+                            exists.aggregate_id,
+                            ixp_data["name"],
+                            ixp_data["name_long"],
+                            ixp_data["city"],
+                            ixp_data["website"],
+                            ixp_data["country"],
+                            date_created,
+                            last_updated,
+                            processing_date,
+                            # ixp_data["id"] in manrs_participants,
+                            # ixp_data["id"] in anchor_hosts,
+                            int(ixp_data["org_id"]),
+                            # int(ixp_data["fac_count"]),
+                        )
                         pass
                     else:
                         _ixp = app.register_ixp(
