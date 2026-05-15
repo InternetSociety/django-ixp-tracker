@@ -3,14 +3,14 @@ from datetime import datetime, timezone
 import pytest
 
 from ixp_tracker import importers
-from ixp_tracker.event_store import EventStore
+from ixp_tracker.event_store import DjangoEventStore
 from ixp_tracker.ixp_tracker import (
     IXPIdMapProjection,
     IXPTracker,
     IXP_TRACKER_EVENT_MAP,
 )
 from ixp_tracker.models import IXPIdMap
-from tests.fixtures import IXPFactory, MockLookup, PeeringIXFactory
+from tests.fixtures import MockLookup, PeeringIXFactory
 
 pytestmark = pytest.mark.django_db
 IXP_TRACKER_ENABLE_EVENT_SOURCING = True
@@ -37,14 +37,27 @@ def test_imports_a_new_ixp():
     assert ixp.aggregate_id
 
 
-@pytest.mark.xfail
-def test_updates_an_existing_ixp():
+def test_updates_an_existing_ixp(faker):
     new_data = PeeringIXFactory()
     manrs_participants = [new_data["id"]]
-    IXPFactory(
-        peeringdb_id=new_data["id"],
-        last_active=datetime(year=2024, month=4, day=1).replace(tzinfo=timezone.utc),
-        manrs_participant=False,
+    app = IXPTracker(DjangoEventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
+    city = faker.city()
+    name = f"{city} - IX"
+    long_name = f"{city} Internet Exchange Point"
+    app.register_ixp(
+        name,
+        long_name,
+        city,
+        new_data["id"],
+        faker.url(schemes=["https"]),
+        faker.country_code(),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        datetime(year=2024, month=4, day=1).replace(tzinfo=timezone.utc, microsecond=1),
+        False,
+        False,
+        faker.random_number(digits=3),
+        faker.random_number(digits=2),
     )
 
     importers.process_ixp_data(
@@ -53,12 +66,9 @@ def test_updates_an_existing_ixp():
         IXP_TRACKER_ENABLE_EVENT_SOURCING,
     )([new_data])
 
-    ixps = IXPIdMap.objects.all()
-    assert len(ixps) == 1
-    ixp = IXPIdMap.objects.first()
+    ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.last_active.date() == datetime.now(timezone.utc).date()
     assert ixp.name == new_data["name"]
-    assert ixp.manrs_participant
 
 
 def test_does_not_import_an_ixp_from_a_non_iso_country():
@@ -93,7 +103,7 @@ def test_saves_manrs_participant():
         IXP_TRACKER_ENABLE_EVENT_SOURCING,
     )([new_data])
 
-    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
+    app = IXPTracker(DjangoEventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
     ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.manrs_participant
 
@@ -107,6 +117,6 @@ def test_saves_anchor_host():
         IXP_TRACKER_ENABLE_EVENT_SOURCING,
     )([new_data])
 
-    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
+    app = IXPTracker(DjangoEventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
     ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.anchor_host

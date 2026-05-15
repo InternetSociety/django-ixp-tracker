@@ -18,7 +18,7 @@ from ixp_tracker.conf import (
     IXP_TRACKER_ENABLE_EVENT_SOURCING,
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
-from ixp_tracker.event_store import EventStore
+from ixp_tracker.event_store import DjangoEventStore
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
@@ -141,7 +141,7 @@ def process_ixp_data(
             try:
                 if enable_event_sourcing:
                     id_maps = IXPIdMapProjection()
-                    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), id_maps)
+                    app = IXPTracker(DjangoEventStore(IXP_TRACKER_EVENT_MAP), id_maps)
                     peeringdb_id = int(ixp_data["id"])
                     # If we set microsecond to 0 then str() doesn't output the microseconds so we set them to 1
                     date_created = datetime.strptime(

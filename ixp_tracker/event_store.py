@@ -55,7 +55,7 @@ class Projection(ABC):
         pass
 
 
-class EventStore:
+class EventStore(ABC):
     listeners: list[Projection]
     event_map: dict[str, type[Event]]
 
@@ -63,6 +63,17 @@ class EventStore:
         self.listeners = []
         self.event_map = event_map
 
+    def store(self, event: Event) -> StoredEvent:
+        pass
+
+    def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:
+        pass
+
+    def add_listener(self, projection: Projection):
+        self.listeners.append(projection)
+
+
+class DjangoEventStore(EventStore):
     def store(self, event: Event) -> StoredEvent:
         previous_event = (
             StoredEvent.objects.filter(aggregate_id=event.aggregate.id)
@@ -119,6 +130,3 @@ class EventStore:
                 event_class(aggregate=aggregate, **event.data)
             )
         return aggregate
-
-    def add_listener(self, projection: Projection):
-        self.listeners.append(projection)
