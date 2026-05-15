@@ -5,8 +5,7 @@ from dataclasses import dataclass, asdict
 from typing import TypeVar
 from uuid import UUID
 
-# At some point we might want to extract a storage mechanism for events so that everything here just depends on a neutral DTO
-# But we probably don't need that complication right now as all our projections will be using Django anyway
+# At some point we might want to change the ES persistence to depend on a neutral DTO rather than this Django model
 from ixp_tracker.models import StoredEvent
 
 logger = logging.getLogger("ixp_tracker")
@@ -55,23 +54,31 @@ class Projection(ABC):
         pass
 
 
+class EventStorePersistence(ABC):
+    def get_event_sequence(self, event: Event) -> int:
+        pass
+
+    def save_event(self, event: StoredEvent):
+        pass
+
+    def get_aggregate_events(
+        self, aggregate_id: UUID, aggregate_type: type[T]
+    ) -> list[StoredEvent]:
+        pass
+
+
 class EventStore:
     listeners: list[Projection]
     event_map: dict[str, type[Event]]
+    db: EventStorePersistence
 
-    def __init__(self, event_map):
+    def __init__(self, event_map, db: EventStorePersistence):
         self.listeners = []
         self.event_map = event_map
+        self.db = db
 
     def store(self, event: Event) -> StoredEvent:
-        previous_event = (
-            StoredEvent.objects.filter(aggregate_id=event.aggregate.id)
-            .order_by("-event_sequence")
-            .first()
-        )
-        event_sequence = 1
-        if previous_event:
-            event_sequence = previous_event.event_sequence + 1
+        event_sequence = self.db.get_event_sequence(event)
         event_data = asdict(event)
         event_data = {
             key: value
@@ -88,19 +95,15 @@ class EventStore:
             event_sequence=event_sequence,
             data=event_data,
         )
-        stored_event.save()
+        self.db.save_event(stored_event)
         for listener in self.listeners:
             listener.handle(stored_event)
 
         return stored_event
 
     def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:
-        events = (
-            StoredEvent.objects.filter(aggregate_id=aggregate_id)
-            .order_by("event_sequence")
-            .all()
-        )
-        if events.count() == 0:
+        events = self.db.get_aggregate_events(aggregate_id, aggregate_type)
+        if len(events) == 0:
             raise AggregateNotFound
 
         aggregate = None
@@ -122,3 +125,23 @@ class EventStore:
 
     def add_listener(self, projection: Projection):
         self.listeners.append(projection)
+
+
+class DjangoEventStore(EventStorePersistence):
+    def get_event_sequence(self, event: Event) -> int:
+        previous_event = (
+            StoredEvent.objects.filter(aggregate_id=event.aggregate.id)
+            .order_by("-event_sequence")
+            .first()
+        )
+        return previous_event.event_sequence + 1 if previous_event else 1
+
+    def save_event(self, event: StoredEvent):
+        event.save()
+
+    def get_aggregate_events(self, aggregate_id: UUID, aggregate_type: type[T]):
+        return (
+            StoredEvent.objects.filter(aggregate_id=aggregate_id)
+            .order_by("event_sequence")
+            .all()
+        )

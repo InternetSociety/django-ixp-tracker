@@ -3,9 +3,10 @@ import pytest
 from uuid import uuid4
 
 from ixp_tracker.event_store import (
-    EventStore,
+    DjangoEventStore,
     EventHasNoUpdatedFields,
     AggregateNotFound,
+    EventStore,
 )
 from ixp_tracker.models import CannotChangeStoredEvent
 from tests.fixtures import (
@@ -19,7 +20,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_saves_event():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -30,7 +31,7 @@ def test_saves_event():
 
 
 def test_saves_event_type():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -41,7 +42,7 @@ def test_saves_event_type():
 
 
 def test_saves_aggregate_type():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -52,7 +53,7 @@ def test_saves_aggregate_type():
 
 
 def test_saves_event_data():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -63,7 +64,7 @@ def test_saves_event_data():
 
 
 def test_saves_aggregate_sequence():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -76,7 +77,7 @@ def test_saves_aggregate_sequence():
 
 
 def test_saved_events_cannot_be_changed():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -89,7 +90,7 @@ def test_saved_events_cannot_be_changed():
 
 
 def test_hydrates_aggregate():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -103,7 +104,7 @@ def test_hydrates_aggregate():
 
 
 def test_sets_property_to_none():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -117,7 +118,7 @@ def test_sets_property_to_none():
 
 
 def test_ignores_properties_not_set_in_event():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -131,7 +132,7 @@ def test_ignores_properties_not_set_in_event():
 
 
 def test_rejects_event_with_no_changes():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
     event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
@@ -142,7 +143,7 @@ def test_rejects_event_with_no_changes():
 
 
 def test_raises_if_aggregate_not_found():
-    es = EventStore(TEST_EVENT_MAP)
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
     aggregate_id = uuid4()
 
     with pytest.raises(AggregateNotFound):

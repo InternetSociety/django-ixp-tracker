@@ -1,21 +1,51 @@
 from datetime import timezone
+from uuid import UUID, uuid4
 
 import pytest
 from faker.proxy import Faker
 
-from ixp_tracker.event_store import EventStore
+from ixp_tracker.event_store import (
+    DjangoEventStore,
+    EventStore,
+    Event,
+    EventStorePersistence,
+)
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
     IXP_TRACKER_EVENT_MAP,
+    IXP,
+    IXPCreated,
 )
-from ixp_tracker.models import IXPIdMap
+from ixp_tracker.models import IXPIdMap, StoredEvent
 
 pytestmark = pytest.mark.django_db
 
 
+class MemoryEventStore(EventStorePersistence):
+    events: list = []
+    sequence = 0
+
+    def __init__(self):
+        self.events = []
+
+    def get_event_sequence(self, event: Event) -> int:
+        self.sequence = self.sequence + 1
+        return self.sequence
+
+    def save_event(self, event: StoredEvent):
+        self.events.append(event)
+
+    def get_aggregate_events(
+        self, aggregate_id: UUID, aggregate_type: type[IXP]
+    ) -> list[StoredEvent]:
+        return self.events
+
+
 def test_registers_ixp(faker: Faker):
-    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), IXPIdMapProjection())
+    app = IXPTracker(
+        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), IXPIdMapProjection()
+    )
 
     city = faker.city()
     name = f"{city} - IX"
@@ -41,30 +71,218 @@ def test_registers_ixp(faker: Faker):
     assert ixp.long_name == long_name
     assert ixp.peeringdb_id == peeringdb_id
 
+    isoc_id = IXPIdMap.objects.get(aggregate_id=ixp.id)
+    assert isoc_id.id > 0
 
-def test_assigns_isoc_id_to_ixp(faker):
-    es = EventStore(IXP_TRACKER_EVENT_MAP)
+
+def test_updates_main_ixp_details(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
     app = IXPTracker(es, IXPIdMapProjection())
 
+    ixp = create_ixp(faker, es)
+
+    new_name = ixp.name + "X"
+    new_long_name = ixp.long_name + "X"
+    new_city = faker.city()
+    new_website = faker.url(schemes=["https"])
+    new_country = faker.country_code()
+    app.update_ixp(
+        ixp.id,
+        new_name,
+        new_long_name,
+        new_city,
+        new_website,
+        new_country,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.random_number(digits=3),
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        ixp.physical_locations,
+    )
+
+    [_event_created, update_event, _last_active] = mes.events
+    assert update_event.event_type == "IXPUpdated"
+    assert update_event.data["name"] == new_name
+
+
+def test_does_not_update_fields_if_not_changed(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+
+    app.update_ixp(
+        ixp.id,
+        ixp.name + "X",
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_id,
+        False,
+        False,
+        ixp.physical_locations,
+    )
+
+    [_event_created, update_event, _last_active] = mes.events
+
+    # Name is the only property that has changed so everything else should be marked as not changed
+    assert update_event.data.get("long_name", None) is None
+    assert update_event.data.get("city", None) is None
+    assert update_event.data.get("website", None) is None
+    assert update_event.data.get("country_code", None) is None
+    assert update_event.data.get("created", None) is None
+    assert update_event.data.get("last_updated", None) is None
+    assert update_event.data.get("org_id", None) is None
+
+
+def test_always_updates_last_active(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+
+    processing_date = faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)
+    ixp = app.update_ixp(
+        ixp.id,
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        processing_date,
+        ixp.org_id,
+        False,
+        False,
+        ixp.physical_locations,
+    )
+
+    [_, last_active_update] = mes.events
+
+    assert last_active_update.event_type == "IXPActiveInPeeringDb"
+    assert ixp.last_active.date() == processing_date.date()
+
+
+def test_registers_change_in_manrs_status(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+    ixp.manrs_participant = False
+
+    ixp = app.update_ixp(
+        ixp.id,
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_id,
+        True,
+        False,
+        ixp.physical_locations,
+    )
+
+    [_event_created, manrs_update, _last_active] = mes.events
+
+    assert manrs_update.event_type == "ManrsStatusChange"
+    assert ixp.manrs_participant
+
+
+def test_registers_change_in_anchor_host(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+
+    ixp = app.update_ixp(
+        ixp.id,
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_id,
+        ixp.manrs_participant,
+        True,
+        ixp.physical_locations,
+    )
+
+    [_event_created, anchor_host_update, _last_active] = mes.events
+
+    assert anchor_host_update.event_type == "AnchorHostChange"
+    assert ixp.anchor_host
+
+
+def test_registers_change_in_location_count(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+
+    ixp = app.update_ixp(
+        ixp.id,
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_id,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        (ixp.physical_locations + 1),
+    )
+
+    [_event_created, physical_locations_update, _last_active] = mes.events
+
+    assert physical_locations_update.event_type == "PhysicalLocationChange"
+    assert ixp.anchor_host is False
+
+
+def create_ixp(faker: Faker, es: EventStore) -> IXP:
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
     peeringdb_id = faker.random_number(digits=3)
-    ixp = app.register_ixp(
+    ixp = IXP(id=uuid4())
+    event = IXPCreated(
+        ixp,
         name,
         long_name,
         city,
         peeringdb_id,
         faker.url(schemes=["https"]),
+        True,
         faker.country_code(),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
         False,
         False,
         faker.random_number(digits=3),
         faker.random_number(digits=2),
     )
-
-    isoc_id = IXPIdMap.objects.get(aggregate_id=ixp.id)
-    assert isoc_id.id > 0
+    es.store(event)
+    return es.get_aggregate(ixp.id, IXP)
