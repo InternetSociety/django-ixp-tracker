@@ -18,7 +18,7 @@ from ixp_tracker.conf import (
     IXP_TRACKER_ENABLE_EVENT_SOURCING,
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
-from ixp_tracker.event_store import EventStore
+from ixp_tracker.event_store import DjangoEventStore
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
@@ -141,7 +141,7 @@ def process_ixp_data(
             try:
                 if enable_event_sourcing:
                     id_maps = IXPIdMapProjection()
-                    app = IXPTracker(EventStore(IXP_TRACKER_EVENT_MAP), id_maps)
+                    app = IXPTracker(DjangoEventStore(IXP_TRACKER_EVENT_MAP), id_maps)
                     peeringdb_id = int(ixp_data["id"])
                     # If we set microsecond to 0 then str() doesn't output the microseconds so we set them to 1
                     date_created = datetime.strptime(
@@ -152,7 +152,21 @@ def process_ixp_data(
                     ).replace(microsecond=1, tzinfo=timezone.utc)
                     exists = id_maps.find_by_peeringdb_id(peeringdb_id)
                     if exists:
-                        # If so update
+                        _ixp = app.update_ixp(
+                            exists.aggregate_id,
+                            ixp_data["name"],
+                            ixp_data["name_long"],
+                            ixp_data["city"],
+                            ixp_data["website"],
+                            ixp_data["country"],
+                            date_created,
+                            last_updated,
+                            processing_date,
+                            # ixp_data["id"] in manrs_participants,
+                            # ixp_data["id"] in anchor_hosts,
+                            int(ixp_data["org_id"]),
+                            # int(ixp_data["fac_count"]),
+                        )
                         pass
                     else:
                         _ixp = app.register_ixp(
