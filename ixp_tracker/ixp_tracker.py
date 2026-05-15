@@ -218,6 +218,10 @@ class IXPTracker:
         event = IXPUpdated(ixp, **updates)
         self.es.store(event)
         ixp.updated(event)
+        # @TODO handle updates to
+        # manrs_participant: bool,
+        # anchor_host: bool,
+        # physical_locations: int,
         return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
