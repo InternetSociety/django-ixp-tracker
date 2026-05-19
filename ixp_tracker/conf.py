@@ -30,3 +30,14 @@ except (TypeError, ValueError):
     raise ImproperlyConfigured("IXP_TRACKER_ENABLE_EVENT_SOURCING must be a boolean")
 
 DATA_ARCHIVE_URL = "https://publicdata.caida.org/datasets/peeringdb/{year}/{month:02d}/peeringdb_2_dump_{year}_{month:02d}_{day:02d}.json"
+# Optional local data archive. When backfilling data the lib will look here first, before trying to get the data from CAIDA
+try:
+    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH = str(
+        settings.IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH
+    )
+except AttributeError:
+    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH = None
+except (TypeError, ValueError):
+    raise ImproperlyConfigured(
+        "IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH must be a string value"
+    )

@@ -2,6 +2,7 @@ import ast
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from glob import glob
 from json.decoder import JSONDecodeError
 from typing import Callable
 
@@ -16,6 +17,7 @@ from ixp_tracker.conf import (
     IXP_TRACKER_PEERING_DB_KEY,
     IXP_TRACKER_PEERING_DB_URL,
     IXP_TRACKER_ENABLE_EVENT_SOURCING,
+    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH,
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import DjangoEventStore, EventStore
@@ -48,6 +50,31 @@ def import_data(
         processing_date = processing_date.replace(day=1)
         processing_month = processing_date.month
         found = False
+        backfill_raw = None
+        if IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH is not None:
+            archive_search_path = f"{IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH}/{processing_date.year}{processing_date.month:02}*"
+            logger.debug(
+                "Searching for archive file locally",
+                extra={"search_path": archive_search_path},
+            )
+            possible_files = glob(archive_search_path)
+            if len(possible_files) > 0:
+                possible_files.sort()
+                archive_file = possible_files[0]
+                file_date = archive_file.replace(
+                    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH + "/", ""
+                ).split(".")[0]
+                processing_date = datetime.strptime(file_date, "%Y%m%d")
+                with open(archive_file) as f:
+                    backfill_raw = f.read()
+                    found = True
+                    logger.debug(
+                        "Found archive file locally",
+                        extra={
+                            "archive_file": archive_file,
+                            "processing_date": processing_date,
+                        },
+                    )
         while processing_date.month == processing_month and not found:
             url = DATA_ARCHIVE_URL.format(
                 year=processing_date.year,
@@ -57,14 +84,18 @@ def import_data(
             data = requests.get(url)
             if data.status_code == 200:
                 found = True
+                backfill_raw = data.text
+                logger.debug(
+                    "Retrieved archive file from CAIDA",
+                    extra={"processing_date": processing_date},
+                )
             else:
                 processing_date = processing_date + timedelta(days=1)
-        if not found:
+        if not found or not backfill_raw:
             logger.warning(
                 "Cannot find backfill data", extra={"backfill_date": processing_date}
             )
             return
-        backfill_raw = data.text
         try:
             backfill_data = json.loads(backfill_raw)
         except JSONDecodeError:
