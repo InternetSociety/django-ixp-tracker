@@ -28,6 +28,7 @@ from ixp_tracker.ixp_tracker import (
 )
 
 logger = logging.getLogger("ixp_tracker")
+PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def import_data(
@@ -64,7 +65,9 @@ def import_data(
                 file_date = archive_file.replace(
                     IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH + "/", ""
                 ).split(".")[0]
-                processing_date = datetime.strptime(file_date, "%Y%m%d")
+                processing_date = datetime.strptime(file_date, "%Y%m%d").replace(
+                    tzinfo=timezone.utc
+                )
                 with open(archive_file) as f:
                     backfill_raw = f.read()
                     found = True
@@ -163,6 +166,8 @@ def process_ixp_data(
     def do_process_ixp_data(all_ixp_data):
         manrs_participants = data_lookup.get_manrs_participants(processing_date)
         anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
+        ixps_added = 0
+        ixps_updated = 0
         for ixp_data in all_ixp_data:
             country_data = countries.alpha2(ixp_data["country"])
             if len(country_data) == 0:
@@ -178,13 +183,12 @@ def process_ixp_data(
                         EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), id_maps
                     )
                     peeringdb_id = int(ixp_data["id"])
-                    # If we set microsecond to 0 then str() doesn't output the microseconds so we set them to 1
                     date_created = datetime.strptime(
-                        ixp_data["created"], "%Y-%m-%dT%H:%M:%SZ"
-                    ).replace(microsecond=1, tzinfo=timezone.utc)
+                        ixp_data["created"], PEERING_DB_DATE_FORMAT
+                    ).replace(tzinfo=timezone.utc)
                     last_updated = datetime.strptime(
-                        ixp_data["updated"], "%Y-%m-%dT%H:%M:%SZ"
-                    ).replace(microsecond=1, tzinfo=timezone.utc)
+                        ixp_data["updated"], PEERING_DB_DATE_FORMAT
+                    ).replace(tzinfo=timezone.utc)
                     exists = id_maps.find_by_peeringdb_id(peeringdb_id)
                     physical_locations = (
                         int(ixp_data["fac_count"])
@@ -211,6 +215,7 @@ def process_ixp_data(
                             "Updating IXP record from Peering Db",
                             extra={"id": ixp_data["id"]},
                         )
+                        ixps_updated += 1
                     else:
                         _ixp = app.register_ixp(
                             ixp_data["name"],
@@ -231,8 +236,9 @@ def process_ixp_data(
                             "Creating IXP record from Peering Db",
                             extra={"id": ixp_data["id"]},
                         )
+                        ixps_added += 1
                 else:
-                    models.IXP.objects.update_or_create(
+                    _, created = models.IXP.objects.update_or_create(
                         peeringdb_id=ixp_data["id"],
                         defaults={
                             "name": ixp_data["name"],
@@ -254,8 +260,16 @@ def process_ixp_data(
                         "Importing IXP record from Peering Db",
                         extra={"id": ixp_data["id"]},
                     )
+                    if created:
+                        ixps_added += 1
+                    else:
+                        ixps_updated += 1
             except Exception as e:
                 logger.warning("Cannot import IXP data", extra={"error": str(e)})
+        logger.info(
+            "Processed IXP data",
+            extra={"added": ixps_added, "updated": ixps_updated},
+        )
 
     logger.debug("Processing IXP data", extra={"event_sourcing": enable_event_sourcing})
     return do_process_ixp_data

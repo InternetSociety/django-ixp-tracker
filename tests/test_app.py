@@ -16,6 +16,7 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     IXP,
     IXPCreated,
+    DATE_FORMAT,
 )
 from ixp_tracker.models import IXPIdMap, StoredEvent
 
@@ -307,9 +308,15 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
         faker.url(schemes=["https"]),
         True,
         faker.country_code(),
-        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
-        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
-        str(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
+            DATE_FORMAT
+        ),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
+            DATE_FORMAT
+        ),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
+            DATE_FORMAT
+        ),
         False,
         False,
         faker.random_number(digits=3),

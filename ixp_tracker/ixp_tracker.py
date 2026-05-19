@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4, UUID
 
 from ixp_tracker.event_store import (
@@ -11,6 +11,8 @@ from ixp_tracker.event_store import (
     ValueNotChanged,
 )
 from ixp_tracker.models import StoredEvent, IXPIdMap
+
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 
 
 @dataclass
@@ -97,13 +99,9 @@ class IXP(Aggregate):
         self.website = event.website
         self.active_status = event.active_status
         self.country_code = event.country_code
-        self.date_created = datetime.strptime(event.created, "%Y-%m-%d %H:%M:%S.%f%z")
-        self.last_updated = datetime.strptime(
-            event.last_updated, "%Y-%m-%d %H:%M:%S.%f%z"
-        )
-        self.last_active = datetime.strptime(
-            event.last_active, "%Y-%m-%d %H:%M:%S.%f%z"
-        )
+        self.date_created = datetime.strptime(event.created, DATE_FORMAT)
+        self.last_updated = datetime.strptime(event.last_updated, DATE_FORMAT)
+        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
         self.manrs_participant = event.manrs_participant
         self.anchor_host = event.anchor_host
         self.org_id = event.org_id
@@ -121,13 +119,9 @@ class IXP(Aggregate):
         if not isinstance(event.country_code, ValueNotChanged):
             self.country_code = event.country_code
         if not isinstance(event.created, ValueNotChanged):
-            self.date_created = datetime.strptime(
-                event.created, "%Y-%m-%d %H:%M:%S.%f%z"
-            )
+            self.date_created = datetime.strptime(event.created, DATE_FORMAT)
         if not isinstance(event.last_updated, ValueNotChanged):
-            self.last_updated = datetime.strptime(
-                event.last_updated, "%Y-%m-%d %H:%M:%S.%f%z"
-            )
+            self.last_updated = datetime.strptime(event.last_updated, DATE_FORMAT)
         if not isinstance(event.org_id, ValueNotChanged):
             self.org_id = event.org_id
 
@@ -141,9 +135,7 @@ class IXP(Aggregate):
         self.physical_locations = event.physical_locations
 
     def active_in_peering_db(self, event: IXPActiveInPeeringDb):
-        self.last_active = datetime.strptime(
-            event.last_active, "%Y-%m-%d %H:%M:%S.%f%z"
-        )
+        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
 
 class IXPIdMapProjection(Projection):
@@ -203,17 +195,16 @@ class IXPTracker:
             website,
             active_status,
             country_code,
-            str(created),
-            str(last_updated),
-            str(last_active),
+            stringify_date(created),
+            stringify_date(last_updated),
+            stringify_date(last_active),
             manrs_participant,
             anchor_host,
             org_id,
             physical_locations,
         )
         self.es.store(event)
-        ixp.created(event)
-        return ixp
+        return self.es.get_aggregate(ixp.id, IXP)
 
     def update_ixp(
         self,
@@ -244,9 +235,9 @@ class IXPTracker:
         if country_code != ixp.country_code:
             updates["country_code"] = country_code
         if created != ixp.date_created:
-            updates["created"] = str(created)
+            updates["created"] = stringify_date(created)
         if last_updated != ixp.last_updated:
-            updates["last_updated"] = str(last_updated)
+            updates["last_updated"] = stringify_date(last_updated)
         if org_id != ixp.org_id:
             updates["org_id"] = org_id
         if len(updates.keys()) > 0:
@@ -264,7 +255,7 @@ class IXPTracker:
         ):
             event = PhysicalLocationChange(ixp, physical_locations=physical_locations)
             self.es.store(event)
-        event = IXPActiveInPeeringDb(ixp, last_active=str(last_active))
+        event = IXPActiveInPeeringDb(ixp, last_active=stringify_date(last_active))
         self.es.store(event)
         return self.es.get_aggregate(ixp.id, IXP)
 
@@ -274,3 +265,9 @@ class IXPTracker:
             return self.es.get_aggregate(id_map.aggregate_id, IXP)
         except (IXPIdMap.DoesNotExist, AggregateNotFound):
             return None
+
+
+def stringify_date(date_value: datetime) -> str:
+    if date_value.tzinfo is None:
+        date_value = date_value.replace(tzinfo=timezone.utc)
+    return date_value.strftime(DATE_FORMAT)
