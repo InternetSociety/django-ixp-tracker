@@ -28,7 +28,7 @@ class IXPCreated(Event):
     manrs_participant: bool
     anchor_host: bool
     org_id: int
-    physical_locations: int
+    physical_locations: int = None
 
 
 @dataclass
@@ -87,7 +87,7 @@ class IXP(Aggregate):
     manrs_participant: bool = False
     anchor_host: bool = False
     org_id: int
-    physical_locations: int
+    physical_locations: int | None
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -229,7 +229,7 @@ class IXPTracker:
         org_id: int,
         manrs_participant: bool,
         anchor_host: bool,
-        physical_locations: int,
+        physical_locations: int | None,
     ):
         ixp = self.es.get_aggregate(aggregate_id, IXP)
         updates = {}
@@ -258,7 +258,10 @@ class IXPTracker:
         if ixp.anchor_host != anchor_host:
             event = AnchorHostChange(ixp, anchor_host=anchor_host)
             self.es.store(event)
-        if ixp.physical_locations != physical_locations:
+        if (
+            ixp.physical_locations != physical_locations
+            and physical_locations is not None
+        ):
             event = PhysicalLocationChange(ixp, physical_locations=physical_locations)
             self.es.store(event)
         event = IXPActiveInPeeringDb(ixp, last_active=str(last_active))

@@ -37,6 +37,19 @@ def test_imports_a_new_ixp():
     assert ixp.aggregate_id
 
 
+def test_import_handles_missing_data():
+    new_data = PeeringIXFactory()
+    del new_data["fac_count"]
+    importers.process_ixp_data(
+        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
+    )([new_data])
+
+    ixps = IXPIdMap.objects.all()
+    assert len(ixps) == 1
+    ixp = ixps.first()
+    assert ixp.aggregate_id
+
+
 def test_updates_an_existing_ixp(faker):
     new_data = PeeringIXFactory()
     app = IXPTracker(

@@ -232,7 +232,7 @@ def test_registers_change_in_anchor_host(faker):
     assert ixp.anchor_host
 
 
-def test_registers_change_in_location_count(faker):
+def test_registers_change_in_location_count_if_both_values_exist(faker):
     mes = MemoryEventStore()
     es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
     app = IXPTracker(es, IXPIdMapProjection())
@@ -259,6 +259,37 @@ def test_registers_change_in_location_count(faker):
 
     assert physical_locations_update.event_type == "PhysicalLocationChange"
     assert ixp.anchor_host is False
+
+
+def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
+    mes = MemoryEventStore()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
+    app = IXPTracker(es, IXPIdMapProjection())
+
+    ixp = create_ixp(faker, es)
+    original_value = ixp.physical_locations
+
+    ixp = app.update_ixp(
+        ixp.id,
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_id,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        None,
+    )
+
+    [event_created, last_active] = mes.events
+
+    assert event_created.event_type == "IXPCreated"
+    assert last_active.event_type == "IXPActiveInPeeringDb"
+    assert ixp.physical_locations == original_value
 
 
 def create_ixp(faker: Faker, es: EventStore) -> IXP:

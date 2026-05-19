@@ -71,7 +71,9 @@ def import_data(
             # It seems some of the Peering dumps use single quotes so try and load using ast in this case
             backfill_data = ast.literal_eval(backfill_raw)
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
-        process_ixp_data(processing_date, additional_data)(ixp_data)
+        process_ixp_data(
+            processing_date, additional_data, IXP_TRACKER_ENABLE_EVENT_SOURCING
+        )(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
         process_asn_data(additional_data)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
@@ -153,6 +155,11 @@ def process_ixp_data(
                         ixp_data["updated"], "%Y-%m-%dT%H:%M:%SZ"
                     ).replace(microsecond=1, tzinfo=timezone.utc)
                     exists = id_maps.find_by_peeringdb_id(peeringdb_id)
+                    physical_locations = (
+                        int(ixp_data["fac_count"])
+                        if ixp_data.get("fac_count") is not None
+                        else None
+                    )
                     if exists:
                         _ixp = app.update_ixp(
                             exists.aggregate_id,
@@ -167,7 +174,7 @@ def process_ixp_data(
                             int(ixp_data["org_id"]),
                             ixp_data["id"] in manrs_participants,
                             ixp_data["id"] in anchor_hosts,
-                            int(ixp_data["fac_count"]),
+                            physical_locations,
                         )
                         logger.debug(
                             "Updating IXP record from Peering Db",
@@ -187,7 +194,7 @@ def process_ixp_data(
                             ixp_data["id"] in manrs_participants,
                             ixp_data["id"] in anchor_hosts,
                             int(ixp_data["org_id"]),
-                            int(ixp_data["fac_count"]),
+                            physical_locations,
                         )
                         logger.debug(
                             "Creating IXP record from Peering Db",
@@ -219,6 +226,7 @@ def process_ixp_data(
             except Exception as e:
                 logger.warning("Cannot import IXP data", extra={"error": str(e)})
 
+    logger.debug("Processing IXP data", extra={"event_sourcing": enable_event_sourcing})
     return do_process_ixp_data
 
 
