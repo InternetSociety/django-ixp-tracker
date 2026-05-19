@@ -2,6 +2,7 @@
 
 ## Unreleased
 - experimental event-sourced version
+- optionally load archived data from local rather than from CAIDA
 
 ## 1.3.3
 - fixes bug in the calculation of monthly_members_change_percent
