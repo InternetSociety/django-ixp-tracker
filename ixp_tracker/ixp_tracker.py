@@ -204,7 +204,8 @@ class IXPTracker:
             physical_locations,
         )
         self.es.store(event)
-        return self.es.get_aggregate(ixp.id, IXP)
+        ixp.created(event)
+        return ixp
 
     def update_ixp(
         self,
@@ -243,21 +244,26 @@ class IXPTracker:
         if len(updates.keys()) > 0:
             event = IXPUpdated(ixp, **updates)
             self.es.store(event)
+            ixp.updated(event)
         if ixp.manrs_participant != manrs_participant:
             manrs_update = ManrsStatusChange(ixp, manrs_participant=manrs_participant)
             self.es.store(manrs_update)
+            ixp.manrs_status_change(manrs_update)
         if ixp.anchor_host != anchor_host:
             event = AnchorHostChange(ixp, anchor_host=anchor_host)
             self.es.store(event)
+            ixp.anchor_host_change(event)
         if (
             ixp.physical_locations != physical_locations
             and physical_locations is not None
         ):
             event = PhysicalLocationChange(ixp, physical_locations=physical_locations)
             self.es.store(event)
+            ixp.physical_location_change(event)
         event = IXPActiveInPeeringDb(ixp, last_active=stringify_date(last_active))
         self.es.store(event)
-        return self.es.get_aggregate(ixp.id, IXP)
+        ixp.active_in_peering_db(event)
+        return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
         try:
