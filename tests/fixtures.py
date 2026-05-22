@@ -6,7 +6,20 @@ import factory
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
-from ixp_tracker.event_store import Event, ValueNotChanged, Aggregate, Projection
+from ixp_tracker.event_store import (
+    Event,
+    ValueNotChanged,
+    Aggregate,
+    Projection,
+    EventStore,
+    DjangoEventStore,
+)
+from ixp_tracker.ixp_tracker import (
+    IXPTracker,
+    IXP_TRACKER_EVENT_MAP,
+    ASNList,
+    IXPIdMapProjection,
+)
 from ixp_tracker.models import (
     ASN,
     IXP,
@@ -129,10 +142,10 @@ class PeeringASNFactory(factory.DictFactory):
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
     info_type = factory.Faker(
-        "random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES]
+        "random_element", elements=[e[1] for e in ASN.NETWORK_TYPE_CHOICES]
     )
     policy_general = factory.Faker(
-        "random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES]
+        "random_element", elements=[e[1] for e in ASN.PEERING_POLICY_CHOICES]
     )
     created = factory.LazyAttribute(
         lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -331,8 +344,8 @@ class TestAggregateUpdated(Event):
 
 
 TEST_EVENT_MAP = {
-    "CreatedTestAggregate": CreatedTestAggregate,
-    "TestAggregateUpdated": TestAggregateUpdated,
+    CreatedTestAggregate.__name__: CreatedTestAggregate,
+    TestAggregateUpdated.__name__: TestAggregateUpdated,
 }
 
 
@@ -365,3 +378,11 @@ class TestProjection(Projection):
 
     def do_handle(self, event: StoredEvent):
         self.handled = True
+
+
+def build_app() -> IXPTracker:
+    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
+    es.add_listener(ASNList())
+    es.add_listener(IXPIdMapProjection())
+    app = IXPTracker(es)
+    return app

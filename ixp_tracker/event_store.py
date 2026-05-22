@@ -36,6 +36,10 @@ class AggregateNotFound(Exception):
     pass
 
 
+class EventNotMapped(Exception):
+    pass
+
+
 class Projection(ABC):
     def __init__(self):
         if self.__getattribute__("aggregate_types") is None:
@@ -119,8 +123,7 @@ class EventStore:
             ).lower()
             event_class = self.event_map.get(event.event_type, None)
             if not event_class:
-                logger.warning("Domain event not registered")
-                continue
+                raise EventNotMapped("Domain event not registered")
             getattr(aggregate, method_name)(
                 event_class(aggregate=aggregate, **event.data)
             )

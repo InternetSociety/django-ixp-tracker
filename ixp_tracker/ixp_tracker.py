@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from uuid import uuid4
 
 from ixp_tracker.event_store import (
@@ -10,7 +11,7 @@ from ixp_tracker.event_store import (
     AggregateNotFound,
     ValueNotChanged,
 )
-from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP
+from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 
@@ -63,16 +64,6 @@ class PhysicalLocationChange(Event):
 @dataclass
 class IXPActiveInPeeringDb(Event):
     last_active: str
-
-
-IXP_TRACKER_EVENT_MAP = {
-    AnchorHostChange.__name__: AnchorHostChange,
-    ManrsStatusChange.__name__: ManrsStatusChange,
-    IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
-    IXPCreated.__name__: IXPCreated,
-    IXPUpdated.__name__: IXPUpdated,
-    PhysicalLocationChange.__name__: PhysicalLocationChange,
-}
 
 
 class IXP(Aggregate):
@@ -138,6 +129,98 @@ class IXP(Aggregate):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
 
+class NetworkType(Enum):
+    NSP = "NSP"
+    CONTENT = "Content"
+    CABLE_DSL_ISP = "Cable/DSL/ISP"
+    ENTERPRISE = "Enterprise"
+    EDUCATION_RESEARCH = "Educational/Research"
+    NON_PROFIT = "Non-Profit"
+    ROUTE_SERVER = "Route Server"
+    NETWORK_SERVICES = "Network Services"
+    ROUTE_COLLECTOR = "Route Collector"
+    GOVERNMENT = "Government"
+    NOT_DISCLOSED = "Not Disclosed"
+    OTHER = "Other"
+    UNKNOWN = "Unknown"
+
+
+class PeeringPolicy(Enum):
+    OPEN = "Open"
+    SELECTIVE = "Selective"
+    RESTRICTIVE = "Restrictive"
+    NO = "No"
+    UNKNOWN = "Unknown"
+
+
+@dataclass
+class ASNCreated(Event):
+    as_number: int
+    name: str
+    network_type: str
+    peering_policy: str
+    peeringdb_id: int
+    country_code: str
+
+
+@dataclass
+class ASNUpdated(Event):
+    name: str = ValueNotChanged()
+    network_type: str = ValueNotChanged()
+    peering_policy: str = ValueNotChanged()
+    country_code: str = ValueNotChanged()
+
+
+# We don't think this should ever happen but record as a separate event if it does
+@dataclass
+class ASNPeeringDbIdChanged(Event):
+    peeringdb_id: int
+
+
+IXP_TRACKER_EVENT_MAP = {
+    AnchorHostChange.__name__: AnchorHostChange,
+    ASNCreated.__name__: ASNCreated,
+    ASNPeeringDbIdChanged.__name__: ASNPeeringDbIdChanged,
+    ASNUpdated.__name__: ASNUpdated,
+    ManrsStatusChange.__name__: ManrsStatusChange,
+    IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
+    IXPCreated.__name__: IXPCreated,
+    IXPUpdated.__name__: IXPUpdated,
+    PhysicalLocationChange.__name__: PhysicalLocationChange,
+}
+
+
+class ASN(Aggregate):
+    name: str
+    number: int
+    peeringdb_id: int
+    # NetworkType is being retired in a future version of PeeringDb so we may need to look for a different source for this
+    network_type: NetworkType
+    peering_policy: PeeringPolicy
+    country_code: str
+
+    def created(self, event: ASNCreated):
+        self.name = event.name
+        self.number = event.as_number
+        self.peeringdb_id = event.peeringdb_id
+        self.network_type = NetworkType(event.network_type)
+        self.peering_policy = PeeringPolicy(event.peering_policy)
+        self.country_code = event.country_code
+
+    def updated(self, event: ASNUpdated):
+        if not isinstance(event.name, ValueNotChanged):
+            self.name = event.name
+        if not isinstance(event.network_type, ValueNotChanged):
+            self.network_type = NetworkType(event.network_type)
+        if not isinstance(event.peering_policy, ValueNotChanged):
+            self.peering_policy = PeeringPolicy(event.peering_policy)
+        if not isinstance(event.country_code, ValueNotChanged):
+            self.country_code = event.country_code
+
+    def peering_db_id_changed(self, event: ASNPeeringDbIdChanged):
+        self.peeringdb_id = event.peeringdb_id
+
+
 class IXPIdMapProjection(Projection):
     aggregate_types = [IXP.__name__]
     events = [IXPCreated.__name__]
@@ -167,6 +250,22 @@ class IXPIdMapProjection(Projection):
             return IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
         except IXPIdMap.DoesNotExist:
             return
+
+
+class ASNList(Projection):
+    aggregate_types = [ASN.__name__]
+    events = [ASNCreated.__name__]
+
+    def do_handle(self, event: StoredEvent):
+        existing = ASNMap.objects.filter(aggregate_id=event.aggregate_id)
+        if existing.count() > 0:
+            return
+        asn = event.data.get("as_number", None)
+        asn_map = ASNMap(
+            aggregate_id=event.aggregate_id,
+            asn=asn,
+        )
+        asn_map.save()
 
 
 class IXPTracker:
@@ -271,6 +370,57 @@ class IXPTracker:
         ixp.active_in_peering_db(event)
         return ixp
 
+    def register_asn(
+        self,
+        as_number: int,
+        name: str,
+        network_type: NetworkType,
+        peering_policy: PeeringPolicy,
+        peeringdb_id: int,
+        country_code,
+    ):
+        asn = ASN(id=uuid4())
+        event = ASNCreated(
+            asn,
+            as_number,
+            name,
+            network_type.value,
+            peering_policy.value,
+            peeringdb_id,
+            country_code,
+        )
+        self.es.store(event)
+        asn.created(event)
+        return asn
+
+    def update_asn(
+        self,
+        asn: ASN,
+        name: str,
+        network_type: NetworkType,
+        peering_policy: PeeringPolicy,
+        peeringdb_id: int,
+        country_code: str,
+    ):
+        updates = {}
+        if name != asn.name:
+            updates["name"] = name
+        if network_type != asn.network_type:
+            updates["network_type"] = network_type.value
+        if peering_policy != asn.peering_policy:
+            updates["peering_policy"] = peering_policy.value
+        if country_code != asn.country_code:
+            updates["country_code"] = country_code
+        if len(updates.keys()) > 0:
+            event = ASNUpdated(asn, **updates)
+            self.es.store(event)
+            asn.updated(event)
+        if peeringdb_id != asn.peeringdb_id:
+            event = ASNPeeringDbIdChanged(asn, peeringdb_id=peeringdb_id)
+            self.es.store(event)
+            asn.peering_db_id_changed(event)
+        return asn
+
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
         try:
             id_map = IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
@@ -280,6 +430,16 @@ class IXPTracker:
 
     def get_all_ixps(self):
         return self.es.get_all(IXP)
+
+    def get_all_asns(self):
+        return self.es.get_all(ASN)
+
+    def get_asn(self, asn) -> ASN | None:
+        try:
+            asn_map = ASNMap.objects.get(asn=asn)
+            return self.es.get_aggregate(asn_map.aggregate_id, ASN)
+        except ASNMap.DoesNotExist:
+            return None
 
 
 def stringify_date(date_value: datetime) -> str:

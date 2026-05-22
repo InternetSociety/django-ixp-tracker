@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 
 from uuid import uuid4
@@ -7,6 +9,8 @@ from ixp_tracker.event_store import (
     EventHasNoUpdatedFields,
     AggregateNotFound,
     EventStore,
+    Event,
+    EventNotMapped,
 )
 from ixp_tracker.models import CannotChangeStoredEvent
 from tests.fixtures import (
@@ -17,6 +21,11 @@ from tests.fixtures import (
 )
 
 pytestmark = pytest.mark.django_db
+
+
+@dataclass
+class UnmappedEvent(Event):
+    foo: str
 
 
 def test_saves_event():
@@ -148,3 +157,14 @@ def test_raises_if_aggregate_not_found():
 
     with pytest.raises(AggregateNotFound):
         es.get_aggregate(aggregate_id, TestAggregate)
+
+
+def test_raises_if_event_not_mapped():
+    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    aggregate = TestAggregate(id=uuid4())
+
+    event = UnmappedEvent(aggregate=aggregate, foo="bar")
+    es.store(event)
+
+    with pytest.raises(EventNotMapped):
+        es.get_aggregate(aggregate.id, TestAggregate)

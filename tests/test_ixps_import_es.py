@@ -3,13 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from ixp_tracker import importers
-from ixp_tracker.event_store import DjangoEventStore, EventStore
-from ixp_tracker.ixp_tracker import (
-    IXPIdMapProjection,
-    IXPTracker,
-    IXP_TRACKER_EVENT_MAP,
-)
-from tests.fixtures import MockLookup, PeeringIXFactory
+from tests.fixtures import MockLookup, PeeringIXFactory, build_app
 
 pytestmark = pytest.mark.django_db
 IXP_TRACKER_ENABLE_EVENT_SOURCING = True
@@ -128,10 +122,3 @@ def test_saves_anchor_host():
 
     ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.anchor_host
-
-
-def build_app() -> IXPTracker:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
-    es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es)
-    return app

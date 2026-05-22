@@ -228,3 +228,21 @@ class IXPIdMap(models.Model):
                 fields=["peeringdb_id"], name="ixp_tracker_aggregate_peeringdb_id"
             ),
         ]
+
+
+class ASNMap(models.Model):
+    aggregate_id = models.UUIDField()
+    asn = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.aggregate_id}, ASN: {self.asn}"
+
+    class Meta:
+        verbose_name = "ASN mapping"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id"], name="ixp_tracker_asn_map_aggregate_id"
+            ),
+            models.UniqueConstraint(fields=["asn"], name="ixp_tracker_asn_map_asn"),
+        ]

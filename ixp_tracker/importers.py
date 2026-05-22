@@ -25,6 +25,8 @@ from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
     IXP_TRACKER_EVENT_MAP,
+    NetworkType,
+    PeeringPolicy,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -304,11 +306,37 @@ def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker = None):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
             try:
+                asn = int(asn_data["asn"])
+                last_updated = dateutil.parser.isoparse(asn_data["updated"])
+                country_code = geo_lookup.get_iso2_country(asn, last_updated)
                 if event_sourcing_app:
-                    pass
+                    exists = event_sourcing_app.get_asn(asn)
+                    try:
+                        network_type = NetworkType(asn_data["info_type"])
+                    except ValueError:
+                        network_type = NetworkType.UNKNOWN
+                    try:
+                        peering_policy = PeeringPolicy(asn_data["policy_general"])
+                    except ValueError:
+                        peering_policy = PeeringPolicy.UNKNOWN
+                    if exists:
+                        event_sourcing_app.update_asn(
+                            exists,
+                            asn_data["name"],
+                            network_type,
+                            peering_policy,
+                            country_code,
+                        )
+                    else:
+                        event_sourcing_app.register_asn(
+                            asn,
+                            asn_data["name"],
+                            network_type,
+                            peering_policy,
+                            asn_data["id"],
+                            country_code,
+                        )
                 else:
-                    asn = int(asn_data["asn"])
-                    last_updated = dateutil.parser.isoparse(asn_data["updated"])
                     models.ASN.objects.update_or_create(
                         peeringdb_id=asn_data["id"],
                         defaults={
@@ -316,9 +344,7 @@ def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker = None):
                             "number": asn,
                             "network_type": asn_data["info_type"],
                             "peering_policy": asn_data["policy_general"],
-                            "registration_country_code": geo_lookup.get_iso2_country(
-                                asn, last_updated
-                            ),
+                            "registration_country_code": country_code,
                             "created": asn_data["created"],
                             "last_updated": last_updated,
                         },
