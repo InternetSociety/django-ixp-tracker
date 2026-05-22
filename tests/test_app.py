@@ -18,7 +18,7 @@ from ixp_tracker.ixp_tracker import (
     IXPCreated,
     DATE_FORMAT,
 )
-from ixp_tracker.models import IXPIdMap, StoredEvent
+from ixp_tracker.models import StoredEvent
 
 pytestmark = pytest.mark.django_db
 
@@ -44,9 +44,7 @@ class MemoryEventStore(EventStorePersistence):
 
 
 def test_registers_ixp(faker: Faker):
-    app = IXPTracker(
-        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), IXPIdMapProjection()
-    )
+    app, _ = build_app()
 
     city = faker.city()
     name = f"{city} - IX"
@@ -72,15 +70,13 @@ def test_registers_ixp(faker: Faker):
     assert ixp.long_name == long_name
     assert ixp.peeringdb_id == peeringdb_id
 
-    isoc_id = IXPIdMap.objects.get(aggregate_id=ixp.id)
-    assert isoc_id.id > 0
+    isoc_id = app.find_by_peeringdb_id(peeringdb_id)
+    assert isoc_id is not None
 
 
 def test_updates_main_ixp_details(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
-
+    app, es = build_app(mes)
     ixp = create_ixp(faker, es)
 
     new_name = ixp.name + "X"
@@ -89,7 +85,7 @@ def test_updates_main_ixp_details(faker):
     new_website = faker.url(schemes=["https"])
     new_country = faker.country_code()
     app.update_ixp(
-        ixp.id,
+        ixp,
         new_name,
         new_long_name,
         new_city,
@@ -111,13 +107,12 @@ def test_updates_main_ixp_details(faker):
 
 def test_does_not_update_fields_if_not_changed(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
+    app, es = build_app(mes)
 
     ixp = create_ixp(faker, es)
 
     app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name + "X",
         ixp.long_name,
         ixp.city,
@@ -146,14 +141,13 @@ def test_does_not_update_fields_if_not_changed(faker):
 
 def test_always_updates_last_active(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
+    app, es = build_app(mes)
 
     ixp = create_ixp(faker, es)
 
     processing_date = faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)
     ixp = app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name,
         ixp.long_name,
         ixp.city,
@@ -176,14 +170,12 @@ def test_always_updates_last_active(faker):
 
 def test_registers_change_in_manrs_status(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
-
+    app, es = build_app(mes)
     ixp = create_ixp(faker, es)
     ixp.manrs_participant = False
 
     ixp = app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name,
         ixp.long_name,
         ixp.city,
@@ -206,13 +198,11 @@ def test_registers_change_in_manrs_status(faker):
 
 def test_registers_change_in_anchor_host(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
-
+    app, es = build_app(mes)
     ixp = create_ixp(faker, es)
 
     ixp = app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name,
         ixp.long_name,
         ixp.city,
@@ -235,13 +225,11 @@ def test_registers_change_in_anchor_host(faker):
 
 def test_registers_change_in_location_count_if_both_values_exist(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
-
+    app, es = build_app(mes)
     ixp = create_ixp(faker, es)
 
     ixp = app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name,
         ixp.long_name,
         ixp.city,
@@ -264,14 +252,12 @@ def test_registers_change_in_location_count_if_both_values_exist(faker):
 
 def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     mes = MemoryEventStore()
-    es = EventStore(IXP_TRACKER_EVENT_MAP, mes)
-    app = IXPTracker(es, IXPIdMapProjection())
-
+    app, es = build_app(mes)
     ixp = create_ixp(faker, es)
     original_value = ixp.physical_locations
 
     ixp = app.update_ixp(
-        ixp.id,
+        ixp,
         ixp.name,
         ixp.long_name,
         ixp.city,
@@ -291,6 +277,13 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     assert event_created.event_type == "IXPCreated"
     assert last_active.event_type == "IXPActiveInPeeringDb"
     assert ixp.physical_locations == original_value
+
+
+def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
+    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
+    es.add_listener(IXPIdMapProjection())
+    app = IXPTracker(es)
+    return app, es
 
 
 def create_ixp(faker: Faker, es: EventStore) -> IXP:

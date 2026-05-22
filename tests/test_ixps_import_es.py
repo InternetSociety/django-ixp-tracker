@@ -9,7 +9,6 @@ from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXP_TRACKER_EVENT_MAP,
 )
-from ixp_tracker.models import IXPIdMap
 from tests.fixtures import MockLookup, PeeringIXFactory
 
 pytestmark = pytest.mark.django_db
@@ -17,44 +16,37 @@ IXP_TRACKER_ENABLE_EVENT_SOURCING = True
 
 
 def test_with_no_data_does_nothing():
-    importers.process_ixp_data(
-        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
-    )([])
+    app = build_app()
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)([])
 
-    # We use the id map as a proxy as we expect one and only one map per imported IXP
-    ixps = IXPIdMap.objects.all()
-    assert len(ixps) == 0
+    assert len(app.get_all_ixps()) == 0
 
 
 def test_imports_a_new_ixp():
-    importers.process_ixp_data(
-        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
-    )([PeeringIXFactory()])
+    app = build_app()
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
+        [PeeringIXFactory()]
+    )
 
-    ixps = IXPIdMap.objects.all()
+    ixps = app.get_all_ixps()
     assert len(ixps) == 1
-    ixp = ixps.first()
-    assert ixp.aggregate_id
 
 
 def test_import_handles_missing_data():
     new_data = PeeringIXFactory()
     del new_data["fac_count"]
-    importers.process_ixp_data(
-        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
-    )([new_data])
+    app = build_app()
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
+        [new_data]
+    )
 
-    ixps = IXPIdMap.objects.all()
+    ixps = app.get_all_ixps()
     assert len(ixps) == 1
-    ixp = ixps.first()
-    assert ixp.aggregate_id
 
 
 def test_updates_an_existing_ixp(faker):
     new_data = PeeringIXFactory()
-    app = IXPTracker(
-        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), IXPIdMapProjection()
-    )
+    app = build_app()
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
@@ -77,7 +69,7 @@ def test_updates_an_existing_ixp(faker):
     importers.process_ixp_data(
         datetime.now(timezone.utc),
         MockLookup(),
-        IXP_TRACKER_ENABLE_EVENT_SOURCING,
+        app,
     )([new_data])
 
     ixp = app.find_by_peeringdb_id(new_data["id"])
@@ -88,11 +80,12 @@ def test_updates_an_existing_ixp(faker):
 def test_does_not_import_an_ixp_from_a_non_iso_country():
     new_data = PeeringIXFactory()
     new_data["country"] = "XK"  # XK is Kosovo, but it's not an official ISO code
-    importers.process_ixp_data(
-        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
-    )([new_data])
+    app = build_app()
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
+        [new_data]
+    )
 
-    ixps = IXPIdMap.objects.all()
+    ixps = app.get_all_ixps()
     assert len(ixps) == 0
 
 
@@ -100,26 +93,25 @@ def test_handles_errors_with_source_data():
     data_with_problems = PeeringIXFactory()
     data_with_problems["created"] = "abc"
 
-    importers.process_ixp_data(
-        datetime.now(timezone.utc), MockLookup(), IXP_TRACKER_ENABLE_EVENT_SOURCING
-    )([data_with_problems])
+    app = build_app()
+    importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
+        [data_with_problems]
+    )
 
-    ixps = IXPIdMap.objects.all()
+    ixps = app.get_all_ixps()
     assert len(ixps) == 0
 
 
 def test_saves_manrs_participant():
     new_data = PeeringIXFactory()
     manrs_participants = [new_data["id"]]
+    app = build_app()
     importers.process_ixp_data(
         datetime.now(timezone.utc),
         MockLookup(manrs_participants=manrs_participants),
-        IXP_TRACKER_ENABLE_EVENT_SOURCING,
+        app,
     )([new_data])
 
-    app = IXPTracker(
-        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), IXPIdMapProjection()
-    )
     ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.manrs_participant
 
@@ -127,14 +119,19 @@ def test_saves_manrs_participant():
 def test_saves_anchor_host():
     new_data = PeeringIXFactory()
     anchor_hosts = [new_data["id"]]
+    app = build_app()
     importers.process_ixp_data(
         datetime.now(timezone.utc),
         MockLookup(anchor_hosts=anchor_hosts),
-        IXP_TRACKER_ENABLE_EVENT_SOURCING,
+        app,
     )([new_data])
 
-    app = IXPTracker(
-        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), IXPIdMapProjection()
-    )
     ixp = app.find_by_peeringdb_id(new_data["id"])
     assert ixp.anchor_host
+
+
+def build_app() -> IXPTracker:
+    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
+    es.add_listener(IXPIdMapProjection())
+    app = IXPTracker(es)
+    return app

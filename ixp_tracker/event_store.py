@@ -66,6 +66,9 @@ class EventStorePersistence(ABC):
     ) -> list[StoredEvent]:
         pass
 
+    def get_all(self, aggregate_type: type[T]) -> list[UUID]:
+        pass
+
 
 class EventStore:
     listeners: list[Projection]
@@ -123,6 +126,13 @@ class EventStore:
             )
         return aggregate
 
+    def get_all(self, aggregate_type: type[T]) -> T:
+        aggregate_ids = self.db.get_all(aggregate_type)
+        aggregates = []
+        for aggregate_id in aggregate_ids:
+            aggregates.append(self.get_aggregate(aggregate_id, aggregate_type))
+        return aggregates
+
     def add_listener(self, projection: Projection):
         self.listeners.append(projection)
 
@@ -144,4 +154,11 @@ class DjangoEventStore(EventStorePersistence):
             StoredEvent.objects.filter(aggregate_id=aggregate_id)
             .order_by("event_sequence")
             .all()
+        )
+
+    def get_all(self, aggregate_type: type[T]) -> list[UUID]:
+        return list(
+            StoredEvent.objects.filter(aggregate_type=aggregate_type.__name__)
+            .values_list("aggregate_id", flat=True)
+            .distinct()
         )

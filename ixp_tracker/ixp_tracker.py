@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import uuid4, UUID
+from uuid import uuid4
 
 from ixp_tracker.event_store import (
     EventStore,
@@ -171,12 +171,9 @@ class IXPIdMapProjection(Projection):
 
 class IXPTracker:
     es: EventStore
-    isoc_ids: IXPIdMapProjection
 
-    def __init__(self, es: EventStore, isoc_ids: IXPIdMapProjection):
+    def __init__(self, es: EventStore):
         self.es = es
-        self.es.add_listener(isoc_ids)
-        self.isoc_ids = isoc_ids
 
     def register_ixp(
         self,
@@ -219,7 +216,7 @@ class IXPTracker:
 
     def update_ixp(
         self,
-        aggregate_id: UUID,
+        ixp: IXP,
         name: str,
         long_name: str,
         city: str,
@@ -233,7 +230,6 @@ class IXPTracker:
         anchor_host: bool,
         physical_locations: int | None,
     ):
-        ixp = self.es.get_aggregate(aggregate_id, IXP)
         updates = {}
         if name != ixp.name:
             updates["name"] = name
@@ -281,6 +277,9 @@ class IXPTracker:
             return self.es.get_aggregate(id_map.aggregate_id, IXP)
         except (IXPIdMap.DoesNotExist, AggregateNotFound):
             return None
+
+    def get_all_ixps(self):
+        return self.es.get_all(IXP)
 
 
 def stringify_date(date_value: datetime) -> str:

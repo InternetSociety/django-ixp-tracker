@@ -37,15 +37,16 @@ def import_data(
     processing_date: datetime = None,
     page_limit: int = 200,
 ):
+    es_app = build_app()
     if processing_date is None:
         processing_date = datetime.now(timezone.utc)
-        import_ixps(processing_date, additional_data)
+        import_ixps(processing_date, additional_data, es_app)
         logger.debug("Imported IXPs")
-        import_asns(additional_data, reset, page_limit)
+        import_asns(additional_data, reset, page_limit, es_app)
         logger.debug("Imported ASNs")
-        import_members(processing_date, additional_data)
+        import_members(processing_date, additional_data, es_app)
         logger.debug("Imported members")
-        toggle_ixp_active_status(processing_date, IXP_TRACKER_ENABLE_EVENT_SOURCING)
+        toggle_ixp_active_status(processing_date, es_app)
         logger.debug("Toggled IXPs active status")
     else:
         processing_date = processing_date.replace(day=1)
@@ -105,16 +106,12 @@ def import_data(
             # It seems some of the Peering dumps use single quotes so try and load using ast in this case
             backfill_data = ast.literal_eval(backfill_raw)
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
-        process_ixp_data(
-            processing_date, additional_data, IXP_TRACKER_ENABLE_EVENT_SOURCING
-        )(ixp_data)
+        process_ixp_data(processing_date, additional_data, es_app)(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
-        process_asn_data(additional_data, IXP_TRACKER_ENABLE_EVENT_SOURCING)(asn_data)
+        process_asn_data(additional_data, es_app)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
-        process_member_data(
-            processing_date, additional_data, IXP_TRACKER_ENABLE_EVENT_SOURCING
-        )(member_data)
-        toggle_ixp_active_status(processing_date, IXP_TRACKER_ENABLE_EVENT_SOURCING)
+        process_member_data(processing_date, additional_data, es_app)(member_data)
+        toggle_ixp_active_status(processing_date, es_app)
         logger.debug("Toggled IXPs active status")
 
 
@@ -151,19 +148,29 @@ def get_data(
     return True
 
 
-def import_ixps(processing_date, data_lookup: AdditionalDataSources) -> bool:
+def import_ixps(
+    processing_date, data_lookup: AdditionalDataSources, es_app: IXPTracker | None
+) -> bool:
     return get_data(
         "/ix",
-        process_ixp_data(
-            processing_date, data_lookup, IXP_TRACKER_ENABLE_EVENT_SOURCING
-        ),
+        process_ixp_data(processing_date, data_lookup, es_app),
     )
+
+
+def build_app() -> IXPTracker | None:
+    if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
+        return None
+    id_maps = IXPIdMapProjection()
+    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
+    es.add_listener(id_maps)
+    app = IXPTracker(es)
+    return app
 
 
 def process_ixp_data(
     processing_date: datetime,
     data_lookup: AdditionalDataSources,
-    enable_event_sourcing: bool = False,
+    event_sourcing_app: IXPTracker = None,
 ):
     def do_process_ixp_data(all_ixp_data):
         manrs_participants = data_lookup.get_manrs_participants(processing_date)
@@ -179,11 +186,7 @@ def process_ixp_data(
                 )
                 continue
             try:
-                if enable_event_sourcing:
-                    id_maps = IXPIdMapProjection()
-                    app = IXPTracker(
-                        EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore()), id_maps
-                    )
+                if event_sourcing_app:
                     peeringdb_id = int(ixp_data["id"])
                     date_created = datetime.strptime(
                         ixp_data["created"], PEERING_DB_DATE_FORMAT
@@ -191,15 +194,15 @@ def process_ixp_data(
                     last_updated = datetime.strptime(
                         ixp_data["updated"], PEERING_DB_DATE_FORMAT
                     ).replace(tzinfo=timezone.utc)
-                    exists = id_maps.find_by_peeringdb_id(peeringdb_id)
+                    exists = event_sourcing_app.find_by_peeringdb_id(peeringdb_id)
                     physical_locations = (
                         int(ixp_data["fac_count"])
                         if ixp_data.get("fac_count") is not None
                         else None
                     )
                     if exists:
-                        _ixp = app.update_ixp(
-                            exists.aggregate_id,
+                        _ixp = event_sourcing_app.update_ixp(
+                            exists,
                             ixp_data["name"],
                             ixp_data["name_long"],
                             ixp_data["city"],
@@ -219,7 +222,7 @@ def process_ixp_data(
                         )
                         ixps_updated += 1
                     else:
-                        _ixp = app.register_ixp(
+                        _ixp = event_sourcing_app.register_ixp(
                             ixp_data["name"],
                             ixp_data["name_long"],
                             ixp_data["city"],
@@ -273,12 +276,15 @@ def process_ixp_data(
             extra={"added": ixps_added, "updated": ixps_updated},
         )
 
-    logger.debug("Processing IXP data", extra={"event_sourcing": enable_event_sourcing})
+    logger.debug("Processing IXP data", extra={"event_sourcing": event_sourcing_app})
     return do_process_ixp_data
 
 
 def import_asns(
-    geo_lookup: ASNGeoLookup, reset: bool = False, page_limit: int = 200
+    geo_lookup: ASNGeoLookup,
+    reset: bool = False,
+    page_limit: int = 200,
+    es_app: IXPTracker = None,
 ) -> bool:
     logger.debug("Fetching ASN data")
     updated_since = None
@@ -288,17 +294,17 @@ def import_asns(
             updated_since = last_updated.last_updated
     return get_data(
         "/net",
-        process_asn_data(geo_lookup, IXP_TRACKER_ENABLE_EVENT_SOURCING),
+        process_asn_data(geo_lookup, es_app),
         limit=page_limit,
         last_updated=updated_since,
     )
 
 
-def process_asn_data(geo_lookup, enable_event_sourcing: bool = False):
+def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker = None):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
             try:
-                if enable_event_sourcing:
+                if event_sourcing_app:
                     pass
                 else:
                     asn = int(asn_data["asn"])
@@ -324,24 +330,24 @@ def process_asn_data(geo_lookup, enable_event_sourcing: bool = False):
     return process_asn_paged_data
 
 
-def import_members(processing_date: datetime, geo_lookup: ASNGeoLookup) -> bool:
+def import_members(
+    processing_date: datetime, geo_lookup: ASNGeoLookup, es_app: IXPTracker | None
+) -> bool:
     logger.debug("Fetching IXP member data")
     return get_data(
         "/netixlan",
-        process_member_data(
-            processing_date, geo_lookup, IXP_TRACKER_ENABLE_EVENT_SOURCING
-        ),
+        process_member_data(processing_date, geo_lookup, es_app),
     )
 
 
 def process_member_data(
     processing_date: datetime,
     geo_lookup: ASNGeoLookup,
-    enable_event_sourcing: bool = False,
+    event_sourcing_app: IXPTracker = None,
 ):
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
-        if enable_event_sourcing:
+        if event_sourcing_app:
             pass
         else:
             for member_data in all_member_data:
@@ -480,9 +486,9 @@ def dedupe_member_data(raw_members_data):
 
 
 def toggle_ixp_active_status(
-    processing_date: datetime, enable_event_sourcing: bool = False
+    processing_date: datetime, event_sourcing_app: IXPTracker = None
 ):
-    if enable_event_sourcing:
+    if event_sourcing_app:
         pass
     else:
         for ixp in models.IXP.objects.all():
