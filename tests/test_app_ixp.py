@@ -1,5 +1,5 @@
 from datetime import timezone
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from faker.proxy import Faker
@@ -15,10 +15,9 @@ from ixp_tracker.ixp_tracker import (
     IXPIdMapProjection,
     IXP_TRACKER_EVENT_MAP,
     IXP,
-    IXPCreated,
-    DATE_FORMAT,
 )
 from ixp_tracker.models import StoredEvent
+from tests.fixtures import create_ixp
 
 pytestmark = pytest.mark.django_db
 
@@ -284,36 +283,3 @@ def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventSto
     es.add_listener(IXPIdMapProjection())
     app = IXPTracker(es)
     return app, es
-
-
-def create_ixp(faker: Faker, es: EventStore) -> IXP:
-    city = faker.city()
-    name = f"{city} - IX"
-    long_name = f"{city} Internet Exchange Point"
-    peeringdb_id = faker.random_number(digits=3)
-    ixp = IXP(id=uuid4())
-    event = IXPCreated(
-        ixp,
-        name,
-        long_name,
-        city,
-        peeringdb_id,
-        faker.url(schemes=["https"]),
-        True,
-        faker.country_code(),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
-            DATE_FORMAT
-        ),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
-            DATE_FORMAT
-        ),
-        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc).strftime(
-            DATE_FORMAT
-        ),
-        False,
-        False,
-        faker.random_number(digits=3),
-        faker.random_number(digits=2),
-    )
-    es.store(event)
-    return es.get_aggregate(ixp.id, IXP)

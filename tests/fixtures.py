@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypedDict, Optional
+from uuid import uuid4
 
 import factory
+from faker import Faker
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
@@ -19,12 +21,16 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     ASNList,
     IXPIdMapProjection,
-)
-from ixp_tracker.models import (
-    ASN,
     IXP,
-    IXPMember,
-    IXPMembershipRecord,
+    IXPCreated,
+    ASN,
+    NetworkType,
+    PeeringPolicy,
+    ASNCreated,
+    stringify_date,
+)
+import ixp_tracker.models as legacy
+from ixp_tracker.models import (
     StatsPerCountry,
     StatsPerIXP,
     StoredEvent,
@@ -64,16 +70,16 @@ def create_member_fixture(
 
 class ASNFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = ASN
+        model = legacy.ASN
 
     name = factory.Faker("nic_handle", suffix="FAKE")
     number = factory.Faker("random_number", digits=5)
     peeringdb_id = factory.Faker("random_number", digits=3)
     network_type = factory.Faker(
-        "random_element", elements=[e[0] for e in ASN.NETWORK_TYPE_CHOICES]
+        "random_element", elements=[e[0] for e in legacy.ASN.NETWORK_TYPE_CHOICES]
     )
     peering_policy = factory.Faker(
-        "random_element", elements=[e[0] for e in ASN.PEERING_POLICY_CHOICES]
+        "random_element", elements=[e[0] for e in legacy.ASN.PEERING_POLICY_CHOICES]
     )
     registration_country_code = factory.Faker("country_code")
     created = factory.Faker(
@@ -86,7 +92,7 @@ class ASNFactory(factory.django.DjangoModelFactory):
 
 class IXPFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = IXP
+        model = legacy.IXP
 
     name = factory.LazyAttribute(lambda obj: f"{obj.city} - IX")
     long_name = factory.LazyAttribute(lambda obj: f"{obj.city} Internet Exchange Point")
@@ -112,7 +118,7 @@ class IXPFactory(factory.django.DjangoModelFactory):
 
 class IXPMemberFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = IXPMember
+        model = legacy.IXPMember
 
     ixp = None
     asn = None
@@ -126,7 +132,7 @@ class IXPMemberFactory(factory.django.DjangoModelFactory):
 
 class IXPMembershipRecordFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = IXPMembershipRecord
+        model = legacy.IXPMembershipRecord
 
     member = None
     start_date = factory.Faker(
@@ -142,10 +148,10 @@ class PeeringASNFactory(factory.DictFactory):
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
     info_type = factory.Faker(
-        "random_element", elements=[e[1] for e in ASN.NETWORK_TYPE_CHOICES]
+        "random_element", elements=[e[1] for e in legacy.ASN.NETWORK_TYPE_CHOICES]
     )
     policy_general = factory.Faker(
-        "random_element", elements=[e[1] for e in ASN.PEERING_POLICY_CHOICES]
+        "random_element", elements=[e[1] for e in legacy.ASN.PEERING_POLICY_CHOICES]
     )
     created = factory.LazyAttribute(
         lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -386,3 +392,50 @@ def build_app() -> IXPTracker:
     es.add_listener(IXPIdMapProjection())
     app = IXPTracker(es)
     return app
+
+
+def create_ixp(faker: Faker, es: EventStore) -> IXP:
+    city = faker.city()
+    name = f"{city} - IX"
+    long_name = f"{city} Internet Exchange Point"
+    peeringdb_id = faker.random_number(digits=3)
+    ixp = IXP(id=uuid4())
+    event = IXPCreated(
+        ixp,
+        name,
+        long_name,
+        city,
+        peeringdb_id,
+        faker.url(schemes=["https"]),
+        True,
+        faker.country_code(),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        False,
+        False,
+        faker.random_number(digits=3),
+        faker.random_number(digits=2),
+    )
+    es.store(event)
+    return es.get_aggregate(ixp.id, IXP)
+
+
+def create_asn(faker: Faker, es: EventStore) -> ASN:
+    as_number = faker.random_number(digits=5)
+    network_type = faker.random_element(NetworkType)
+    name = faker.company()
+    peering_policy = faker.random_element(PeeringPolicy)
+    peeringdb_id = faker.random_number(digits=3)
+    asn = ASN(id=uuid4())
+    event = ASNCreated(
+        asn,
+        as_number,
+        name,
+        network_type.value,
+        peering_policy.value,
+        peeringdb_id,
+        faker.country_code(),
+    )
+    es.store(event)
+    return es.get_aggregate(asn.id, ASN)

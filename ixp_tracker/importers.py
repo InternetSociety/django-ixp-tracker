@@ -374,6 +374,32 @@ def process_member_data(
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
         if event_sourcing_app:
+            for member_data in all_member_data:
+                log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}
+                ixp = event_sourcing_app.find_by_peeringdb_id(member_data["ix_id"])
+                if ixp is None:
+                    logger.warning("Cannot find IXP", extra=log_data)
+                    continue
+                asn = int(member_data["asn"])
+                created_date = datetime.strptime(
+                    member_data["created"], PEERING_DB_DATE_FORMAT
+                ).replace(tzinfo=timezone.utc)
+                updated_date = datetime.strptime(
+                    member_data["updated"], PEERING_DB_DATE_FORMAT
+                ).replace(tzinfo=timezone.utc)
+                member = event_sourcing_app.register_member(
+                    ixp,
+                    asn,
+                    created_date,
+                    updated_date,
+                    processing_date,
+                    bool(member_data["is_rs_peer"]),
+                    int(member_data["speed"]),
+                )
+                if member is None:
+                    logger.warning("Cannot import member", extra=log_data)
+                else:
+                    logger.debug("Imported new member", extra=log_data)
             pass
         else:
             for member_data in all_member_data:

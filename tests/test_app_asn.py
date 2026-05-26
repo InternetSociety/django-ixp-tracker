@@ -1,4 +1,4 @@
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from faker.proxy import Faker
@@ -16,9 +16,9 @@ from ixp_tracker.ixp_tracker import (
     PeeringPolicy,
     ASNList,
     ASN,
-    ASNCreated,
 )
 from ixp_tracker.models import StoredEvent
+from tests.fixtures import create_asn
 
 pytestmark = pytest.mark.django_db
 
@@ -139,23 +139,3 @@ def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventSto
     es.add_listener(ASNList())
     app = IXPTracker(es)
     return app, es
-
-
-def create_asn(faker: Faker, es: EventStore) -> ASN:
-    as_number = faker.random_number(digits=5)
-    network_type = faker.random_element(NetworkType)
-    name = faker.company()
-    peering_policy = faker.random_element(PeeringPolicy)
-    peeringdb_id = faker.random_number(digits=3)
-    asn = ASN(id=uuid4())
-    event = ASNCreated(
-        asn,
-        as_number,
-        name,
-        network_type,
-        peering_policy,
-        peeringdb_id,
-        faker.country_code(),
-    )
-    es.store(event)
-    return es.get_aggregate(asn.id, ASN)
