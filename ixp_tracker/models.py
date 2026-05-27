@@ -246,3 +246,27 @@ class ASNMap(models.Model):
             ),
             models.UniqueConstraint(fields=["asn"], name="ixp_tracker_asn_map_asn"),
         ]
+
+
+class IXPASNMemberMap(models.Model):
+    aggregate_id = models.UUIDField()
+    ixp_id = models.UUIDField()
+    asn_id = models.UUIDField()
+
+    def __str__(self):
+        return f"{self.aggregate_id}, IXP id: {self.ixp_id}, ASN: {self.asn_id}"
+
+    class Meta:
+        verbose_name = "IXP ASN member mapping"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id"], name="ixp_tracker_ixp_asn_member_map_aggregate_id"
+            ),
+            models.UniqueConstraint(
+                fields=["ixp_id"], name="ixp_tracker_ixp_asn_member_map_ixp_id"
+            ),
+            models.UniqueConstraint(
+                fields=["asn_id"], name="ixp_tracker_ixp_asn_member_map_asn_id"
+            ),
+        ]
