@@ -129,7 +129,7 @@ class EventStore:
             )
         return aggregate
 
-    def get_all(self, aggregate_type: type[T]) -> T:
+    def get_all(self, aggregate_type: type[T]) -> list[T]:
         aggregate_ids = self.db.get_all(aggregate_type)
         aggregates = []
         for aggregate_id in aggregate_ids:
