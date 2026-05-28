@@ -21,12 +21,15 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     ASNList,
     IXPIdMapProjection,
+    MemberMapProjection,
     IXP,
     IXPCreated,
+    IXPMember,
     ASN,
     NetworkType,
     PeeringPolicy,
     ASNCreated,
+    IXPMemberCreated,
     stringify_date,
 )
 import ixp_tracker.models as legacy
@@ -390,6 +393,7 @@ def build_app() -> IXPTracker:
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(ASNList())
     es.add_listener(IXPIdMapProjection())
+    es.add_listener(MemberMapProjection())
     app = IXPTracker(es)
     return app
 
@@ -439,3 +443,23 @@ def create_asn(faker: Faker, es: EventStore) -> ASN:
     )
     es.store(event)
     return es.get_aggregate(asn.id, ASN)
+
+
+def create_member(faker: Faker, es: EventStore) -> IXPMember:
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    is_rs_peer = faker.boolean
+    port_speed = faker.random_number(digits=5)
+    member = IXPMember(id=uuid4())
+    event = IXPMemberCreated(
+        member,
+        str(ixp.id),
+        str(asn.id),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        is_rs_peer,
+        port_speed,
+    )
+    es.store(event)
+    return es.get_aggregate(member.id, IXPMember)
