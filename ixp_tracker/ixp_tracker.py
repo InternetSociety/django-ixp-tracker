@@ -11,7 +11,7 @@ from ixp_tracker.event_store import (
     AggregateNotFound,
     ValueNotChanged,
 )
-from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap
+from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap, IXPASNMemberMap
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 
@@ -140,6 +140,13 @@ class IXP(Aggregate):
     def member_added(self, event: IXPMemberAdded):
         self.member_ids.append(UUID(event.member_id))
 
+    def member_updated(self, event: IXPMemberUpdated):
+        pass
+
+    # def member_left(self, event: IXPMemberLeft):
+    #     self.member_ids.remove(UUID(event.member_id))
+
+
 
 class NetworkType(Enum):
     NSP = "NSP"
@@ -200,6 +207,23 @@ class IXPMemberCreated(Event):
     port_speed: int
 
 
+@dataclass
+class IXPMemberUpdated(Event):
+    created_date: str = ValueNotChanged()
+    updated_date: str = ValueNotChanged()
+    port_speed: int = ValueNotChanged()
+
+
+@dataclass
+class MemberActiveInPeeringDb(Event):
+    last_active: str
+
+
+@dataclass
+class RsPeeringStatusChange(Event):
+    is_rs_peer: bool
+
+
 IXP_TRACKER_EVENT_MAP = {
     AnchorHostChange.__name__: AnchorHostChange,
     ASNCreated.__name__: ASNCreated,
@@ -208,9 +232,13 @@ IXP_TRACKER_EVENT_MAP = {
     ManrsStatusChange.__name__: ManrsStatusChange,
     IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
     IXPCreated.__name__: IXPCreated,
+    IXPMemberAdded.__name__: IXPMemberAdded,
     IXPMemberCreated.__name__: IXPMemberCreated,
+    IXPMemberUpdated.__name__: IXPMemberUpdated,
     IXPUpdated.__name__: IXPUpdated,
+    MemberActiveInPeeringDb.__name__: MemberActiveInPeeringDb,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
+    RsPeeringStatusChange.__name__: RsPeeringStatusChange,
 }
 
 
@@ -264,6 +292,22 @@ class IXPMember(Aggregate):
         self.port_speed = event.port_speed
 
 
+    def updated(self, event: IXPMemberUpdated):
+        if not isinstance(event.created_date, ValueNotChanged):
+            self.created_date = datetime.strptime(event.created_date, DATE_FORMAT)
+        if not isinstance(event.updated_date, ValueNotChanged):
+            self.updated_date = datetime.strptime(event.updated_date, DATE_FORMAT)
+        if not isinstance(event.port_speed, ValueNotChanged):
+            self.port_speed = event.port_speed
+
+    def rs_peering_status_change(self, event: RsPeeringStatusChange):
+        self.is_rs_peer = event.is_rs_peer
+
+    def active_in_peering_db(self, event: MemberActiveInPeeringDb):
+        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
+
+
+
 class IXPIdMapProjection(Projection):
     aggregate_types = [IXP.__name__]
     events = [IXPCreated.__name__]
@@ -275,7 +319,7 @@ class IXPIdMapProjection(Projection):
         peeringdb_id = event.data.get("peeringdb_id", None)
         preserve_legacy_id = LegacyIXP.objects.filter(peeringdb_id=peeringdb_id).first()
         if preserve_legacy_id:
-            # If a legacy object exists, use that's primary key as our primary key to preserve the "isoc_id"
+            # If a legacy object exists, use that object's primary key as our primary key to preserve the "isoc_id"
             isoc_id = IXPIdMap(
                 id=preserve_legacy_id.id,
                 aggregate_id=event.aggregate_id,
@@ -309,6 +353,24 @@ class ASNList(Projection):
             asn=asn,
         )
         asn_map.save()
+
+
+class MemberMapProjection(Projection):
+    aggregate_types = [IXPMember.__name__]
+    events = [IXPMemberCreated.__name__]
+
+    def do_handle(self, event: StoredEvent):
+        existing = IXPASNMemberMap.objects.filter(aggregate_id=event.aggregate_id)
+        if existing.count() > 0:
+            return
+        asn_id = event.data.get("asn_id", None)
+        ixp_id = event.data.get("ixp_id", None)
+        member_map = IXPASNMemberMap(
+            aggregate_id=event.aggregate_id,
+            ixp_id=ixp_id,
+            asn_id=asn_id,
+        )
+        member_map.save()
 
 
 class IXPTracker:
@@ -495,6 +557,35 @@ class IXPTracker:
         ixp.member_added(event)
         return member
 
+    def update_member(
+        self,
+        member: IXPMember,
+        created_date: datetime,
+        updated_date: datetime,
+        processing_date: datetime,
+        is_rs_peer: bool,
+        port_speed: int,
+    ):
+        updates = {}
+        if created_date != member.created_date:
+            updates["created_date"] = stringify_date(created_date)
+        if updated_date != member.updated_date:
+            updates["updated_date"] = stringify_date(updated_date)
+        if port_speed != member.port_speed:
+            updates["port_speed"] = port_speed
+        if len(updates.keys()) > 0:
+            event = IXPMemberUpdated(member, **updates)
+            self.es.store(event)
+            member.updated(event)
+        if member.is_rs_peer != is_rs_peer:
+            rs_peer_update = RsPeeringStatusChange(member, is_rs_peer=is_rs_peer)
+            self.es.store(rs_peer_update)
+            member.rs_peering_status_change(rs_peer_update)
+        event = MemberActiveInPeeringDb(member, last_active=stringify_date(processing_date))
+        self.es.store(event)
+        member.active_in_peering_db(event)
+        return member
+
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
         try:
             id_map = IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
@@ -518,6 +609,12 @@ class IXPTracker:
     def get_all_members(self):
         return self.es.get_all(IXPMember)
 
+    def get_member(self, ixp_id: UUID, asn_id: UUID) -> IXPMember | None:
+        try:
+            member_map = IXPASNMemberMap.objects.get(ixp_id=ixp_id, asn_id=asn_id)
+            return self.es.get_aggregate(member_map.aggregate_id, IXPMember)
+        except IXPASNMemberMap.DoesNotExist:
+            return None
 
 def stringify_date(date_value: datetime) -> str:
     if date_value.tzinfo is None:

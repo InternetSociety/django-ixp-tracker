@@ -24,9 +24,11 @@ from ixp_tracker.event_store import DjangoEventStore, EventStore
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
+    MemberMapProjection,
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
+    IXPMember,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -163,8 +165,10 @@ def build_app() -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
         return None
     id_maps = IXPIdMapProjection()
+    member_maps = MemberMapProjection()
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(id_maps)
+    es.add_listener(member_maps)
     app = IXPTracker(es)
     return app
 
@@ -381,26 +385,45 @@ def process_member_data(
                     logger.warning("Cannot find IXP", extra=log_data)
                     continue
                 asn = int(member_data["asn"])
+                as_entity = event_sourcing_app.get_asn(asn)
+                if as_entity is None:
+                    logger.warning("Cannot find ASN", extra=log_data)
+                    continue
                 created_date = datetime.strptime(
                     member_data["created"], PEERING_DB_DATE_FORMAT
                 ).replace(tzinfo=timezone.utc)
                 updated_date = datetime.strptime(
                     member_data["updated"], PEERING_DB_DATE_FORMAT
                 ).replace(tzinfo=timezone.utc)
-                member = event_sourcing_app.register_member(
-                    ixp,
-                    asn,
-                    created_date,
-                    updated_date,
-                    processing_date,
-                    bool(member_data["is_rs_peer"]),
-                    int(member_data["speed"]),
-                )
-                if member is None:
-                    logger.warning("Cannot import member", extra=log_data)
+                exists = event_sourcing_app.get_member(ixp.id, as_entity.id)
+                if exists:
+                    member = event_sourcing_app.update_member(
+                        exists,
+                        created_date,
+                        updated_date,
+                        processing_date,
+                        bool(member_data["is_rs_peer"]),
+                        int(member_data["speed"]),
+                    )
+                    if member is None:
+                        logger.warning("Cannot update member", extra=log_data)
+                    else:
+                        logger.debug("Updated existing member", extra=log_data)
                 else:
-                    logger.debug("Imported new member", extra=log_data)
-            pass
+                    member = event_sourcing_app.register_member(
+                        ixp,
+                        asn,
+                        created_date,
+                        updated_date,
+                        processing_date,
+                        bool(member_data["is_rs_peer"]),
+                        int(member_data["speed"]),
+                    )
+                    if member is None:
+                        logger.warning("Cannot import member", extra=log_data)
+                    else:
+                        logger.debug("Imported new member", extra=log_data)
+                pass
         else:
             for member_data in all_member_data:
                 log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}

@@ -10,6 +10,7 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     IXPIdMapProjection,
     ASNList,
+    MemberMapProjection,
 )
 from ixp_tracker.models import IXPMember, IXPMembershipRecord
 from tests.fixtures import (
@@ -19,11 +20,13 @@ from tests.fixtures import (
     create_member_fixture,
     create_ixp,
     create_asn,
+    create_member,
 )
 
 pytestmark = pytest.mark.django_db
 
 date_now = datetime.now(timezone.utc)
+date_yesterday = date_now - timedelta(days=1)
 
 
 class TestLookup(ASNGeoLookup):
@@ -90,43 +93,43 @@ def test_does_nothing_if_no_ixp_found(faker):
     assert len(members) == 0
 
 
-@pytest.mark.xfail
-def test_updates_existing_member():
-    ixp = IXPFactory()
-    member = create_member_fixture(ixp)
-    member_import = PeeringNetIXLANFactory(
-        asn=member.asn.number, ix_id=ixp.peeringdb_id
-    )
+def test_updates_existing_member(faker):
+    app, es = build_app()
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
 
-    app, _ = build_app()
+    existing = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
+    processor = importers.process_member_data(date_yesterday, TestLookup(), app)
+    processor([existing])
+
+    updates = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
     processor = importers.process_member_data(date_now, TestLookup(), app)
-    processor([member_import])
+    processor([updates])
 
-    members = IXPMember.objects.all()
+    members = app.get_all_members()
     assert len(members) == 1
-    updated = members.first()
-    assert updated.last_active > member.last_active
+    updated = members.pop(0)
+    assert updated.last_active > date_yesterday
 
 
-@pytest.mark.xfail
-def test_updates_membership_for_existing_member():
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp, membership_properties={"speed": 500, "is_rs_peer": False}
-    )
-    member_import = PeeringNetIXLANFactory(
-        asn=member.asn.number, ix_id=ixp.peeringdb_id, speed=10000, is_rs_peer=True
-    )
+def test_updates_membership_for_existing_member(faker):
+    app, es = build_app()
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
 
-    app, _ = build_app()
+    existing = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id, speed=500, is_rs_peer=False)
+    processor = importers.process_member_data(date_yesterday, TestLookup(), app)
+    processor([existing])
+
+    updates = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id, speed=10000, is_rs_peer=True)
     processor = importers.process_member_data(date_now, TestLookup(), app)
-    processor([member_import])
+    processor([updates])
 
-    membership = IXPMembershipRecord.objects.filter(member=member)
-    assert len(membership) == 1
-    current_membership = membership.first()
-    assert current_membership.is_rs_peer
-    assert current_membership.speed == 10000
+    members = app.get_all_members()
+    assert len(members) == 1
+    updated = members.pop(0)
+    assert updated.port_speed == 10000
+    assert updated.is_rs_peer
 
 
 @pytest.mark.xfail
@@ -331,5 +334,6 @@ def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventSto
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
+    es.add_listener(MemberMapProjection())
     app = IXPTracker(es)
     return app, es
