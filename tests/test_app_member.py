@@ -56,6 +56,42 @@ def test_imports_member(faker: Faker):
     assert asn.number in members[0].keys()
 
 
+def test_imports_multiple_members(faker: Faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+
+    asn1 = create_asn(faker, es)
+    asn2 = create_asn(faker, es)
+    ixp = create_ixp(faker, es)
+
+    assert len(ixp.get_members()) == 0
+
+    imported = app.import_members(
+        ixp.peeringdb_id,
+        [{
+            "asn": asn1.number,
+            "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+            "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+            "last_active": date_now,
+            "is_rs_peer": faker.boolean(),
+            "port_speed": faker.random_number(digits=5),
+        },
+        {
+            "asn": asn2.number,
+            "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+            "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+            "last_active": date_now,
+            "is_rs_peer": faker.boolean(),
+            "port_speed": faker.random_number(digits=5),
+        },]
+    )
+
+    members = imported.get_members()
+    assert len(members) == 2
+    assert asn1.number in members[0].keys()
+    assert asn2.number in members[1].keys()
+
+
 def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
