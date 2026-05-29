@@ -10,6 +10,7 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     IXPIdMapProjection,
     ASNList,
+    IXPMemberData,
 )
 from ixp_tracker.models import IXPMember, IXPMembershipRecord
 from tests.fixtures import (
@@ -41,12 +42,13 @@ class TestLookup(ASNGeoLookup):
         return self.default_status
 
 
+
 def test_with_no_data_does_nothing():
     app, _ = build_app()
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([])
 
-    members = app.get_all_members()
+    members = get_all_members(app)
     assert len(members) == 0
 
 
@@ -56,13 +58,10 @@ def test_adds_new_member(faker):
     asn = create_asn(faker, es)
     member_import = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
 
-    members = app.get_all_members()
-    assert len(members) == 0
-
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
+    members = get_all_members(app)
     assert len(members) == 1
     ixp_members = members.pop(0)
     assert str(asn.number) in ixp_members.keys()
@@ -73,13 +72,10 @@ def test_does_nothing_if_no_asn_found(faker):
     ixp = create_ixp(faker, es)
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
 
-    members = app.get_all_members()
-    assert len(members) == 0
-
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
+    members = get_all_members(app)
     assert len(members) == 0
 
 
@@ -92,7 +88,7 @@ def test_does_nothing_if_no_ixp_found(faker):
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
+    members = get_all_members(app)
     assert len(members) == 0
 
 
@@ -339,3 +335,11 @@ def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventSto
     es.add_listener(ASNList())
     app = IXPTracker(es)
     return app, es
+
+
+def get_all_members(app) -> list[IXPMemberData]:
+    members = []
+    ixps = app.get_all_ixps()
+    for ixp in ixps:
+        members += ixp.members
+    return members
