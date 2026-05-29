@@ -250,11 +250,11 @@ class ASNMap(models.Model):
 
 class IXPASNMemberMap(models.Model):
     aggregate_id = models.UUIDField()
-    ixp_id = models.UUIDField()
-    asn_id = models.UUIDField()
+    isoc_id = models.IntegerField()
+    asn = models.IntegerField()
 
     def __str__(self):
-        return f"{self.aggregate_id}, IXP id: {self.ixp_id}, ASN: {self.asn_id}"
+        return f"{self.aggregate_id}, IXP id: {self.isoc_id}, ASN: {self.asn}"
 
     class Meta:
         verbose_name = "IXP ASN member mapping"
@@ -264,9 +264,6 @@ class IXPASNMemberMap(models.Model):
                 fields=["aggregate_id"], name="ixp_tracker_ixp_asn_member_map_aggregate_id"
             ),
             models.UniqueConstraint(
-                fields=["ixp_id"], name="ixp_tracker_ixp_asn_member_map_ixp_id"
-            ),
-            models.UniqueConstraint(
-                fields=["asn_id"], name="ixp_tracker_ixp_asn_member_map_asn_id"
+                fields=["isoc_id", "asn"], name="ixp_tracker_ixp_asn_member_map_isoc_id_asn"
             ),
         ]

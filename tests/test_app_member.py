@@ -117,7 +117,7 @@ def test_always_updates_last_active(faker):
 
     [_ixp_created, _asn_created, _member_created, last_active_update] = mes.events
 
-    assert last_active_update.event_type == "MemberActiveInPeeringDb"
+    assert last_active_update.event_type == "IXPMemberActiveInPeeringDb"
     assert member.last_active.date() == processing_date.date()
 
 

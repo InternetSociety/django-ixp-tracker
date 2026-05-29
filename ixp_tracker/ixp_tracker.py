@@ -140,12 +140,6 @@ class IXP(Aggregate):
     def member_added(self, event: IXPMemberAdded):
         self.member_ids.append(UUID(event.member_id))
 
-    def member_updated(self, event: IXPMemberUpdated):
-        pass
-
-    # def member_left(self, event: IXPMemberLeft):
-    #     self.member_ids.remove(UUID(event.member_id))
-
 
 
 class NetworkType(Enum):
@@ -215,7 +209,7 @@ class IXPMemberUpdated(Event):
 
 
 @dataclass
-class MemberActiveInPeeringDb(Event):
+class IXPMemberActiveInPeeringDb(Event):
     last_active: str
 
 
@@ -236,7 +230,7 @@ IXP_TRACKER_EVENT_MAP = {
     IXPMemberCreated.__name__: IXPMemberCreated,
     IXPMemberUpdated.__name__: IXPMemberUpdated,
     IXPUpdated.__name__: IXPUpdated,
-    MemberActiveInPeeringDb.__name__: MemberActiveInPeeringDb,
+    IXPMemberActiveInPeeringDb.__name__: IXPMemberActiveInPeeringDb,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
     RsPeeringStatusChange.__name__: RsPeeringStatusChange,
 }
@@ -303,7 +297,7 @@ class IXPMember(Aggregate):
     def rs_peering_status_change(self, event: RsPeeringStatusChange):
         self.is_rs_peer = event.is_rs_peer
 
-    def active_in_peering_db(self, event: MemberActiveInPeeringDb):
+    def active_in_peering_db(self, event: IXPMemberActiveInPeeringDb):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
 
@@ -363,12 +357,12 @@ class MemberMapProjection(Projection):
         existing = IXPASNMemberMap.objects.filter(aggregate_id=event.aggregate_id)
         if existing.count() > 0:
             return
-        asn_id = event.data.get("asn_id", None)
-        ixp_id = event.data.get("ixp_id", None)
+        asn = event.data.get("as_number", None)
+        isoc_id = event.data.get("isoc_id", None)
         member_map = IXPASNMemberMap(
             aggregate_id=event.aggregate_id,
-            ixp_id=ixp_id,
-            asn_id=asn_id,
+            isoc_id=isoc_id,
+            asn=asn,
         )
         member_map.save()
 
@@ -581,7 +575,7 @@ class IXPTracker:
             rs_peer_update = RsPeeringStatusChange(member, is_rs_peer=is_rs_peer)
             self.es.store(rs_peer_update)
             member.rs_peering_status_change(rs_peer_update)
-        event = MemberActiveInPeeringDb(member, last_active=stringify_date(processing_date))
+        event = IXPMemberActiveInPeeringDb(member, last_active=stringify_date(processing_date))
         self.es.store(event)
         member.active_in_peering_db(event)
         return member
@@ -609,9 +603,9 @@ class IXPTracker:
     def get_all_members(self):
         return self.es.get_all(IXPMember)
 
-    def get_member(self, ixp_id: UUID, asn_id: UUID) -> IXPMember | None:
+    def get_member(self, isoc_id: int, asn: int) -> IXPMember | None:
         try:
-            member_map = IXPASNMemberMap.objects.get(ixp_id=ixp_id, asn_id=asn_id)
+            member_map = IXPASNMemberMap.objects.get(isoc_id=isoc_id, asn=asn)
             return self.es.get_aggregate(member_map.aggregate_id, IXPMember)
         except IXPASNMemberMap.DoesNotExist:
             return None
