@@ -387,10 +387,11 @@ def process_member_data(
                 port_speed = int(member_data["speed"])
                 ix_id = int(member_data["ix_id"])
                 import_data = {
-                    "asn": asn, 
-                    "created_date": created_date, 
-                    "updated_date": updated_date, 
-                    "is_rs_peer": is_rs_peer, 
+                    "asn": asn,
+                    "created_date": created_date,
+                    "updated_date": updated_date,
+                    "last_active": processing_date,
+                    "is_rs_peer": is_rs_peer,
                     "port_speed": port_speed
                 }
                 seen = ixp_data.get(ix_id)

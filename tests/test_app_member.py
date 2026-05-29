@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import datetime, timezone
 from uuid import UUID
 import pytest
 from faker import Faker
@@ -9,6 +9,7 @@ from tests.fixtures import create_ixp, create_asn
 
 pytestmark = pytest.mark.django_db
 
+date_now = datetime.now(timezone.utc)
 
 class MemoryEventStore(EventStorePersistence):
     events: list = []
@@ -30,7 +31,7 @@ class MemoryEventStore(EventStorePersistence):
         return [event for event in self.events if event.aggregate_id == aggregate_id]
 
 
-def test_adds_member_that_does_not_already_exist(faker: Faker):
+def test_imports_member(faker: Faker):
     mes = MemoryEventStore()
     app, es = build_app(mes)
 
@@ -39,21 +40,20 @@ def test_adds_member_that_does_not_already_exist(faker: Faker):
 
     assert len(ixp.get_members()) == 0
 
-    app.import_members(
+    imported = app.import_members(
         ixp.peeringdb_id,
         [{
             "asn": asn.number,
             "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
             "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+            "last_active": date_now,
             "is_rs_peer": faker.boolean(),
             "port_speed": faker.random_number(digits=5),
         },]
     )
-
-    members = ixp.get_members()
+    members = imported.get_members()
     assert len(members) == 1
-    print(members[0])
-    assert asn.number == members[0]["asn"]
+    assert asn.number in members[0].keys()
 
 
 def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:

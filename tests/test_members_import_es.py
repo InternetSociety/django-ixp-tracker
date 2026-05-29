@@ -56,19 +56,25 @@ def test_adds_new_member(faker):
     asn = create_asn(faker, es)
     member_import = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
 
+    members = app.get_all_members()
+    assert len(members) == 0
+
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
     members = app.get_all_members()
     assert len(members) == 1
-    member = members.pop(0)
-    assert member.asn_id == asn.id
+    ixp_members = members.pop(0)
+    assert str(asn.number) in ixp_members.keys()
 
 
 def test_does_nothing_if_no_asn_found(faker):
     app, es = build_app()
     ixp = create_ixp(faker, es)
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
+
+    members = app.get_all_members()
+    assert len(members) == 0
 
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
