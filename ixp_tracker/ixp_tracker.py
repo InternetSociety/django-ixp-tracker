@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from uuid import uuid4, UUID
-
+from uuid import uuid4
 from ixp_tracker.event_store import (
     EventStore,
     Projection,
@@ -67,8 +66,23 @@ class IXPActiveInPeeringDb(Event):
 
 
 @dataclass
+class IXPMemberDetails:
+    created_date: str
+    updated_date: str
+    last_active: str
+    is_rs_peer: bool
+    port_speed: int
+
+
+@dataclass
+class IXPMemberData:
+    asn: int
+    data: IXPMemberDetails
+
+
+@dataclass
 class IXPMemberAdded(Event):
-    member_data: dict
+    member_data: IXPMemberData
 
 
 class IXP(Aggregate):
@@ -86,7 +100,7 @@ class IXP(Aggregate):
     anchor_host: bool = False
     org_id: int
     physical_locations: int | None
-    members: list[dict]
+    members: list[IXPMemberData]
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -437,18 +451,15 @@ class IXPTracker:
 
     def import_members(
         self,
-        ixp: int,
-        ixp_data: list[dict],
+        ixp: IXP,
+        ixp_data: list[IXPMemberData],
     ):
-        ixp_entity = self.find_by_peeringdb_id(ixp)
-        if ixp_entity is None:
-            return None
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
             if as_entity is None:
                 continue
             event = IXPMemberAdded(
-                ixp_entity,
+                ixp,
                 {
                     member["asn"]: {
                         "created_date": stringify_date(member["created_date"]),
@@ -460,8 +471,8 @@ class IXPTracker:
                 }
             )
             self.es.store(event)
-            ixp_entity.member_added(event)
-        return ixp_entity
+            ixp.member_added(event)
+        return ixp
 
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
@@ -483,13 +494,6 @@ class IXPTracker:
             return self.es.get_aggregate(asn_map.aggregate_id, ASN)
         except ASNMap.DoesNotExist:
             return None
-
-    def get_all_members(self) -> list[dict]:
-        members = []
-        ixps = self.get_all_ixps()
-        for ixp in ixps:
-            members += ixp.members
-        return members
 
 
 def stringify_date(date_value: datetime) -> str:

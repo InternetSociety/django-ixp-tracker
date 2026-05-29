@@ -402,7 +402,10 @@ def process_member_data(
             for ixp in ixp_data:                
                 log_data = {"ixp": ixp}
                 logger.debug("Importing IXP members", extra=log_data)
-                import_members = event_sourcing_app.import_members(ixp, ixp_data[ixp])
+                ixp_entity = event_sourcing_app.find_by_peeringdb_id(ixp)
+                if ixp_entity is None:
+                    continue
+                import_members = event_sourcing_app.import_members(ixp_entity, ixp_data[ixp])
                 if import_members is None:
                     logger.warning("Cannot import IXP members", extra=log_data)
                 else:

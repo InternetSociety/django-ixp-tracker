@@ -41,7 +41,7 @@ def test_imports_member(faker: Faker):
     assert len(ixp.get_members()) == 0
 
     imported = app.import_members(
-        ixp.peeringdb_id,
+        ixp,
         [{
             "asn": asn.number,
             "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
@@ -67,7 +67,7 @@ def test_imports_multiple_members(faker: Faker):
     assert len(ixp.get_members()) == 0
 
     imported = app.import_members(
-        ixp.peeringdb_id,
+        ixp,
         [{
             "asn": asn1.number,
             "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
