@@ -374,12 +374,8 @@ def process_member_data(
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
         if event_sourcing_app:
+            ixp_data = {}
             for member_data in all_member_data:
-                log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}
-                ixp = event_sourcing_app.find_by_peeringdb_id(member_data["ix_id"])
-                if ixp is None:
-                    logger.warning("Cannot find IXP", extra=log_data)
-                    continue
                 asn = int(member_data["asn"])
                 created_date = datetime.strptime(
                     member_data["created"], PEERING_DB_DATE_FORMAT
@@ -387,20 +383,29 @@ def process_member_data(
                 updated_date = datetime.strptime(
                     member_data["updated"], PEERING_DB_DATE_FORMAT
                 ).replace(tzinfo=timezone.utc)
-                member = event_sourcing_app.register_member(
-                    ixp,
-                    asn,
-                    created_date,
-                    updated_date,
-                    processing_date,
-                    bool(member_data["is_rs_peer"]),
-                    int(member_data["speed"]),
-                )
-                if member is None:
-                    logger.warning("Cannot import member", extra=log_data)
+                is_rs_peer = bool(member_data["is_rs_peer"])
+                port_speed = int(member_data["speed"])
+                ix_id = int(member_data["ix_id"])
+                import_data = {
+                    "asn": asn, 
+                    "created_date": created_date, 
+                    "updated_date": updated_date, 
+                    "is_rs_peer": is_rs_peer, 
+                    "port_speed": port_speed
+                }
+                seen = ixp_data.get(ix_id)
+                if not seen:
+                    ixp_data[ix_id] = [import_data]
                 else:
-                    logger.debug("Imported new member", extra=log_data)
-            pass
+                    ixp_data[ix_id] += [import_data]
+            for ixp in ixp_data:                
+                log_data = {"ixp": ixp}
+                logger.debug("Importing IXP members", extra=log_data)
+                import_members = event_sourcing_app.import_members(ixp, ixp_data[ixp])
+                if import_members is None:
+                    logger.warning("Cannot import IXP members", extra=log_data)
+                else:
+                    logger.debug("Imported IXP members", extra=log_data)
         else:
             for member_data in all_member_data:
                 log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}
