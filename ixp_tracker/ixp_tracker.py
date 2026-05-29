@@ -68,12 +68,7 @@ class IXPActiveInPeeringDb(Event):
 
 @dataclass
 class IXPMemberAdded(Event):
-    asn: str
-    created_date: str
-    updated_date: str
-    last_active: str
-    is_rs_peer: bool
-    port_speed: int
+    member_data: dict
 
 
 class IXP(Aggregate):
@@ -143,15 +138,7 @@ class IXP(Aggregate):
         return self.members
 
     def member_added(self, event: IXPMemberAdded):
-        self.members.append({
-            event.asn: {
-                event.created_date,
-                event.updated_date,
-                event.last_active,
-                event.is_rs_peer,
-                event.port_speed,
-            }
-        })
+        self.members.append(event.member_data)
 
 
 class NetworkType(Enum):
@@ -454,22 +441,25 @@ class IXPTracker:
     ):
         processing_date = datetime.now(timezone.utc)
         ixp_entity = self.find_by_peeringdb_id(ixp)
-        print(f"ixp: {ixp_entity}")
+        if ixp_entity is None:
+            return None
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
             if as_entity is None:
                 continue
             event = IXPMemberAdded(
                 ixp_entity,
-                member["asn"],
-                member["created_date"],
-                member["updated_date"],
-                processing_date,
-                member["is_rs_peer"],
-                member["port_speed"],                
+                {
+                    "asn": member["asn"],
+                    "created_date": member["created_date"],
+                    "updated_date": member["updated_date"],
+                    "last_active": processing_date,
+                    "is_rs_peer": member["is_rs_peer"],
+                    "port_speed": member["port_speed"],                
+                }
             )
             self.es.store(event)
-            ixp.member_added(event)
+            ixp_entity.member_added(event)
             return ixp
 
 

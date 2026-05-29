@@ -27,7 +27,7 @@ class MemoryEventStore(EventStorePersistence):
     def get_aggregate_events(
         self, aggregate_id: UUID, aggregate_type: type[Aggregate]
     ) -> list[StoredEvent]:
-        return self.events
+        return [event for event in self.events if event.aggregate_id == aggregate_id]
 
 
 def test_adds_member_that_does_not_already_exist(faker: Faker):
@@ -35,7 +35,6 @@ def test_adds_member_that_does_not_already_exist(faker: Faker):
     app, es = build_app(mes)
 
     asn = create_asn(faker, es)
-    print(mes.events)
     ixp = create_ixp(faker, es)
 
     assert len(ixp.get_members()) == 0
@@ -53,7 +52,8 @@ def test_adds_member_that_does_not_already_exist(faker: Faker):
 
     members = ixp.get_members()
     assert len(members) == 1
-    assert asn.number == members[0].asn
+    print(members[0])
+    assert asn.number == members[0]["asn"]
 
 
 def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
