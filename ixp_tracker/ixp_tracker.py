@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from typing import TypedDict
 from uuid import uuid4
 from ixp_tracker.event_store import (
     EventStore,
@@ -67,22 +68,21 @@ class IXPActiveInPeeringDb(Event):
 
 @dataclass
 class IXPMemberDetails:
-    created_date: str
-    updated_date: str
-    last_active: str
+    created_date: datetime
+    updated_date: datetime
+    last_active: datetime
     is_rs_peer: bool
     port_speed: int
 
 
 @dataclass
-class IXPMemberData:
-    asn: int
-    data: IXPMemberDetails
-
-
-@dataclass
 class IXPMemberAdded(Event):
-    member_data: IXPMemberData
+    asn: int
+    created_date: str
+    updated_date: str
+    last_active: str
+    is_rs_peer: bool
+    port_speed: int
 
 
 class IXP(Aggregate):
@@ -100,7 +100,7 @@ class IXP(Aggregate):
     anchor_host: bool = False
     org_id: int
     physical_locations: int | None
-    members: list[IXPMemberData]
+    members: dict[int, IXPMemberDetails]
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -117,7 +117,7 @@ class IXP(Aggregate):
         self.anchor_host = event.anchor_host
         self.org_id = event.org_id
         self.physical_locations = event.physical_locations
-        self.members = []
+        self.members = {}
 
     def updated(self, event: IXPUpdated):
         if not isinstance(event.name, ValueNotChanged):
@@ -149,11 +149,18 @@ class IXP(Aggregate):
     def active_in_peering_db(self, event: IXPActiveInPeeringDb):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
-    def get_members(self) -> list[dict]:
+    def get_members(self) -> dict[int, IXPMemberDetails]:
         return self.members
 
     def member_added(self, event: IXPMemberAdded):
-        self.members.append(event.member_data)
+        details = IXPMemberDetails(
+            datetime.strptime(event.created_date, DATE_FORMAT),
+            datetime.strptime(event.updated_date, DATE_FORMAT),
+            datetime.strptime(event.last_active, DATE_FORMAT),
+            event.is_rs_peer,
+            event.port_speed,
+        )
+        self.members[event.asn] = details
 
 
 class NetworkType(Enum):
@@ -294,6 +301,15 @@ class ASNList(Projection):
             asn=asn,
         )
         asn_map.save()
+
+
+class MemberImportData(TypedDict):
+    asn: int
+    created_date: datetime
+    updated_date: datetime
+    last_active: datetime
+    is_rs_peer: bool
+    port_speed: int
 
 
 class IXPTracker:
@@ -452,7 +468,7 @@ class IXPTracker:
     def import_members(
         self,
         ixp: IXP,
-        ixp_data: list[IXPMemberData],
+        ixp_data: list[MemberImportData],
     ):
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
@@ -460,20 +476,16 @@ class IXPTracker:
                 continue
             event = IXPMemberAdded(
                 ixp,
-                {
-                    member["asn"]: {
-                        "created_date": stringify_date(member["created_date"]),
-                        "updated_date": stringify_date(member["updated_date"]),
-                        "last_active": stringify_date(member["last_active"]),
-                        "is_rs_peer": member["is_rs_peer"],
-                        "port_speed": member["port_speed"],                
-                    }
-                }
+                member["asn"],
+                stringify_date(member["created_date"]),
+                stringify_date(member["updated_date"]),
+                stringify_date(member["last_active"]),
+                member["is_rs_peer"],
+                member["port_speed"],
             )
             self.es.store(event)
             ixp.member_added(event)
         return ixp
-
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
         try:

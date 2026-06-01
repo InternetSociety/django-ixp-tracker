@@ -392,20 +392,22 @@ def process_member_data(
                     "updated_date": updated_date,
                     "last_active": processing_date,
                     "is_rs_peer": is_rs_peer,
-                    "port_speed": port_speed
+                    "port_speed": port_speed,
                 }
                 seen = ixp_data.get(ix_id)
                 if not seen:
                     ixp_data[ix_id] = [import_data]
                 else:
                     ixp_data[ix_id] += [import_data]
-            for ixp in ixp_data:                
+            for ixp in ixp_data:
                 log_data = {"ixp": ixp}
                 logger.debug("Importing IXP members", extra=log_data)
                 ixp_entity = event_sourcing_app.find_by_peeringdb_id(ixp)
                 if ixp_entity is None:
                     continue
-                import_members = event_sourcing_app.import_members(ixp_entity, ixp_data[ixp])
+                import_members = event_sourcing_app.import_members(
+                    ixp_entity, ixp_data[ixp]
+                )
                 if import_members is None:
                     logger.warning("Cannot import IXP members", extra=log_data)
                 else:

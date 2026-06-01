@@ -3,13 +3,26 @@ from uuid import UUID
 import pytest
 from faker import Faker
 
-from ixp_tracker.event_store import EventStorePersistence, EventStore, DjangoEventStore, Event, StoredEvent, Aggregate
-from ixp_tracker.ixp_tracker import IXPTracker, IXP_TRACKER_EVENT_MAP, ASNList, IXPIdMapProjection
+from ixp_tracker.event_store import (
+    EventStorePersistence,
+    EventStore,
+    DjangoEventStore,
+    Event,
+    StoredEvent,
+    Aggregate,
+)
+from ixp_tracker.ixp_tracker import (
+    IXPTracker,
+    IXP_TRACKER_EVENT_MAP,
+    ASNList,
+    IXPIdMapProjection,
+)
 from tests.fixtures import create_ixp, create_asn
 
 pytestmark = pytest.mark.django_db
 
 date_now = datetime.now(timezone.utc)
+
 
 class MemoryEventStore(EventStorePersistence):
     events: list = []
@@ -42,18 +55,24 @@ def test_imports_member(faker: Faker):
 
     imported = app.import_members(
         ixp,
-        [{
-            "asn": asn.number,
-            "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "last_active": date_now,
-            "is_rs_peer": faker.boolean(),
-            "port_speed": faker.random_number(digits=5),
-        },]
+        [
+            {
+                "asn": asn.number,
+                "created_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "updated_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "last_active": date_now,
+                "is_rs_peer": faker.boolean(),
+                "port_speed": faker.random_number(digits=5),
+            },
+        ],
     )
     members = imported.get_members()
     assert len(members) == 1
-    assert asn.number in members[0].keys()
+    assert asn.number in members.keys()
 
 
 def test_imports_multiple_members(faker: Faker):
@@ -68,28 +87,38 @@ def test_imports_multiple_members(faker: Faker):
 
     imported = app.import_members(
         ixp,
-        [{
-            "asn": asn1.number,
-            "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "last_active": date_now,
-            "is_rs_peer": faker.boolean(),
-            "port_speed": faker.random_number(digits=5),
-        },
-        {
-            "asn": asn2.number,
-            "created_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-            "last_active": date_now,
-            "is_rs_peer": faker.boolean(),
-            "port_speed": faker.random_number(digits=5),
-        },]
+        [
+            {
+                "asn": asn1.number,
+                "created_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "updated_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "last_active": date_now,
+                "is_rs_peer": faker.boolean(),
+                "port_speed": faker.random_number(digits=5),
+            },
+            {
+                "asn": asn2.number,
+                "created_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "updated_date": faker.date_time_between(
+                    start_date="-1d", tzinfo=timezone.utc
+                ),
+                "last_active": date_now,
+                "is_rs_peer": faker.boolean(),
+                "port_speed": faker.random_number(digits=5),
+            },
+        ],
     )
 
-    members = imported.get_members()
+    members = imported.get_members().keys()
     assert len(members) == 2
-    assert asn1.number in members[0].keys()
-    assert asn2.number in members[1].keys()
+    assert asn1.number in members
+    assert asn2.number in members
 
 
 def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
