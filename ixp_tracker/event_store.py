@@ -1,6 +1,6 @@
 import logging
 import re
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from typing import TypeVar
 from uuid import UUID
@@ -11,12 +11,14 @@ from ixp_tracker.models import StoredEvent
 logger = logging.getLogger("ixp_tracker")
 
 convert_event_type_to_method_name = re.compile(r"(?<!^)(?=[A-Z])")
-T = TypeVar("T")
 
 
-@dataclass()
+@dataclass
 class Aggregate(ABC):
     id: UUID
+
+
+T = TypeVar("T", bound=Aggregate)
 
 
 @dataclass
@@ -59,20 +61,25 @@ class Projection(ABC):
 
 
 class EventStorePersistence(ABC):
+    @abstractmethod
     def get_event_sequence(self, event: Event) -> int:
         pass
 
+    @abstractmethod
     def save_event(self, event: StoredEvent):
         pass
 
+    @abstractmethod
     def get_aggregate_events(
         self, aggregate_id: UUID, aggregate_type: type[T]
     ) -> list[StoredEvent]:
         pass
 
+    @abstractmethod
     def get_all(self, aggregate_type: type[T]) -> list[UUID]:
         pass
 
+    @abstractmethod
     def get_events(self) -> list[StoredEvent]:
         pass
 
@@ -116,10 +123,8 @@ class EventStore:
         if len(events) == 0:
             raise AggregateNotFound
 
-        aggregate = None
+        aggregate = aggregate_type(aggregate_id)
         for event in events:
-            if aggregate is None:
-                aggregate = aggregate_type(aggregate_id)
             method_name = event.event_type.replace(aggregate_type.__name__, "")
             method_name = convert_event_type_to_method_name.sub(
                 "_", method_name
@@ -132,7 +137,7 @@ class EventStore:
             )
         return aggregate
 
-    def get_all(self, aggregate_type: type[T]) -> T:
+    def get_all(self, aggregate_type: type[T]) -> list[T]:
         aggregate_ids = self.db.get_all(aggregate_type)
         aggregates = []
         for aggregate_id in aggregate_ids:

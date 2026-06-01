@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TypedDict, Optional
-from uuid import uuid4
+from typing import TypedDict, Optional, Any
+from uuid import uuid4, UUID
 
 import factory
 from faker import Faker
@@ -15,6 +15,8 @@ from ixp_tracker.event_store import (
     Projection,
     EventStore,
     DjangoEventStore,
+    EventStorePersistence,
+    T,
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
@@ -53,8 +55,8 @@ def create_member_fixture(
     ixp,
     asn=None,
     quantity=1,
-    membership_properties: MembershipProperties = None,
-    member_properties: MemberProperties = None,
+    membership_properties: MembershipProperties | None = None,
+    member_properties: MemberProperties | None = None,
 ):
     created = 0
     member = None
@@ -264,10 +266,10 @@ class MockLookup(AdditionalDataSources):
         self.anchor_hosts = anchor_hosts
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        pass
+        return ""
 
     def get_status(self, asn: int, as_at: datetime) -> str:
-        pass
+        return ""
 
     def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
         return self.asns
@@ -326,7 +328,7 @@ class StoredEventFactory(factory.django.DjangoModelFactory):
     )
     event_type = factory.Faker("word")
     event_sequence = factory.Faker("random_int", max=200)
-    data = {}
+    data: dict[str, Any] = {}
 
 
 class IXPIdMapFactory(factory.django.DjangoModelFactory):
@@ -345,8 +347,8 @@ class CreatedTestAggregate(Event):
 @dataclass
 class TestAggregateUpdated(Event):
     __test__ = False
-    foo: Optional[str] = ValueNotChanged()
-    bar: str = ValueNotChanged()
+    foo: Optional[str] | ValueNotChanged = ValueNotChanged()
+    bar: str | ValueNotChanged = ValueNotChanged()
 
 
 TEST_EVENT_MAP = {
@@ -357,7 +359,7 @@ TEST_EVENT_MAP = {
 
 class TestAggregate(Aggregate):
     __test__ = False
-    foo: str
+    foo: str | None
     bar: Optional[str] = None
 
     def created(self, event: CreatedTestAggregate):
@@ -384,6 +386,32 @@ class TestProjection(Projection):
 
     def do_handle(self, event: StoredEvent):
         self.handled = True
+
+
+class MemoryEventStore(EventStorePersistence):
+    events: list[StoredEvent] = []
+    sequence = 0
+
+    def __init__(self):
+        self.events = []
+
+    def get_event_sequence(self, event: Event) -> int:
+        self.sequence = self.sequence + 1
+        return self.sequence
+
+    def save_event(self, event: StoredEvent):
+        self.events.append(event)
+
+    def get_aggregate_events(
+        self, aggregate_id: UUID, aggregate_type: type[T]
+    ) -> list[StoredEvent]:
+        return [e for e in self.events if e.aggregate_id == aggregate_id]
+
+    def get_all(self, aggregate_type: type[T]) -> list[UUID]:
+        return []
+
+    def get_events(self) -> list[StoredEvent]:
+        return self.events
 
 
 def build_app() -> IXPTracker:

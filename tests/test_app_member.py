@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from uuid import UUID
 import pytest
 from faker import Faker
 
@@ -7,9 +6,6 @@ from ixp_tracker.event_store import (
     EventStorePersistence,
     EventStore,
     DjangoEventStore,
-    Event,
-    StoredEvent,
-    Aggregate,
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
@@ -17,31 +13,11 @@ from ixp_tracker.ixp_tracker import (
     ASNList,
     IXPIdMapProjection,
 )
-from tests.fixtures import create_ixp, create_asn
+from tests.fixtures import create_ixp, create_asn, MemoryEventStore
 
 pytestmark = pytest.mark.django_db
 
 date_now = datetime.now(timezone.utc)
-
-
-class MemoryEventStore(EventStorePersistence):
-    events: list = []
-    sequence = 0
-
-    def __init__(self):
-        self.events = []
-
-    def get_event_sequence(self, event: Event) -> int:
-        self.sequence = self.sequence + 1
-        return self.sequence
-
-    def save_event(self, event: StoredEvent):
-        self.events.append(event)
-
-    def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[Aggregate]
-    ) -> list[StoredEvent]:
-        return [event for event in self.events if event.aggregate_id == aggregate_id]
 
 
 def test_imports_member(faker: Faker):
@@ -121,7 +97,9 @@ def test_imports_multiple_members(faker: Faker):
     assert asn2.number in members
 
 
-def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
+def build_app(
+    es_db: EventStorePersistence | None = None,
+) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())

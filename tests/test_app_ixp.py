@@ -1,5 +1,4 @@
 from datetime import timezone
-from uuid import UUID
 
 import pytest
 from faker.proxy import Faker
@@ -7,39 +6,16 @@ from faker.proxy import Faker
 from ixp_tracker.event_store import (
     DjangoEventStore,
     EventStore,
-    Event,
     EventStorePersistence,
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     IXPIdMapProjection,
     IXP_TRACKER_EVENT_MAP,
-    IXP,
 )
-from ixp_tracker.models import StoredEvent
-from tests.fixtures import create_ixp
+from tests.fixtures import create_ixp, MemoryEventStore
 
 pytestmark = pytest.mark.django_db
-
-
-class MemoryEventStore(EventStorePersistence):
-    events: list = []
-    sequence = 0
-
-    def __init__(self):
-        self.events = []
-
-    def get_event_sequence(self, event: Event) -> int:
-        self.sequence = self.sequence + 1
-        return self.sequence
-
-    def save_event(self, event: StoredEvent):
-        self.events.append(event)
-
-    def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[IXP]
-    ) -> list[StoredEvent]:
-        return self.events
 
 
 def test_registers_ixp(faker: Faker):
@@ -278,7 +254,9 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     assert ixp.physical_locations == original_value
 
 
-def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
+def build_app(
+    es_db: EventStorePersistence | None = None,
+) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     app = IXPTracker(es)

@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from glob import glob
 from json.decoder import JSONDecodeError
-from typing import Callable
+from typing import Callable, Any
 
 import dateutil.parser
 import requests
@@ -36,7 +36,7 @@ PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 def import_data(
     additional_data: AdditionalDataSources,
     reset: bool = False,
-    processing_date: datetime = None,
+    processing_date: datetime | None = None,
     page_limit: int = 200,
 ):
     es_app = build_app()
@@ -118,10 +118,13 @@ def import_data(
 
 
 def get_data(
-    endpoint: str, processor: Callable, limit: int = 0, last_updated: datetime = None
+    endpoint: str,
+    processor: Callable,
+    limit: int = 0,
+    last_updated: datetime | None = None,
 ) -> bool:
     url = f"{IXP_TRACKER_PEERING_DB_URL}{endpoint}"
-    query_params = {}
+    query_params: dict[str, Any] = {}
     if last_updated is not None:
         query_params["updated__gte"] = last_updated.strftime("%Y-%m-%d")
     if limit > 0:
@@ -172,7 +175,7 @@ def build_app() -> IXPTracker | None:
 def process_ixp_data(
     processing_date: datetime,
     data_lookup: AdditionalDataSources,
-    event_sourcing_app: IXPTracker = None,
+    event_sourcing_app: IXPTracker | None = None,
 ):
     def do_process_ixp_data(all_ixp_data):
         manrs_participants = data_lookup.get_manrs_participants(processing_date)
@@ -286,7 +289,7 @@ def import_asns(
     geo_lookup: ASNGeoLookup,
     reset: bool = False,
     page_limit: int = 200,
-    es_app: IXPTracker = None,
+    es_app: IXPTracker | None = None,
 ) -> bool:
     logger.debug("Fetching ASN data")
     updated_since = None
@@ -302,7 +305,7 @@ def import_asns(
     )
 
 
-def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker = None):
+def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker | None = None):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
             try:
@@ -369,7 +372,7 @@ def import_members(
 def process_member_data(
     processing_date: datetime,
     geo_lookup: ASNGeoLookup,
-    event_sourcing_app: IXPTracker = None,
+    event_sourcing_app: IXPTracker | None = None,
 ):
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
@@ -549,19 +552,19 @@ def dedupe_member_data(raw_members_data):
 
 
 def toggle_ixp_active_status(
-    processing_date: datetime, event_sourcing_app: IXPTracker = None
+    processing_date: datetime, event_sourcing_app: IXPTracker | None = None
 ):
     if event_sourcing_app:
         pass
     else:
         for ixp in models.IXP.objects.all():
             active_members = models.IXPMembershipRecord.objects.filter(
-                member__in=ixp.ixpmember_set.all()
+                member__in=ixp.ixpmember_set.all()  # type: ignore
             ).filter(Q(end_date__isnull=True) | Q(end_date__gte=processing_date))
             # Note that `last_active` is the date we last saw the IXP in the source data and is used to track deletions
             # We update `last_updated` here when we toggle the active status as we use that to signify our IXP record has been changed
             # even though usually `last_updated` is taken from the source data field of the same name
-            new_active_status = is_ixp_active(active_members)
+            new_active_status = is_ixp_active(list(active_members))
             if ixp.active_status != new_active_status:
                 ixp.active_status = new_active_status
                 ixp.last_updated = processing_date

@@ -1,12 +1,9 @@
-from uuid import UUID
-
 import pytest
 from faker.proxy import Faker
 
 from ixp_tracker.event_store import (
     DjangoEventStore,
     EventStore,
-    Event,
     EventStorePersistence,
 )
 from ixp_tracker.ixp_tracker import (
@@ -15,32 +12,10 @@ from ixp_tracker.ixp_tracker import (
     NetworkType,
     PeeringPolicy,
     ASNList,
-    ASN,
 )
-from ixp_tracker.models import StoredEvent
-from tests.fixtures import create_asn
+from tests.fixtures import create_asn, MemoryEventStore
 
 pytestmark = pytest.mark.django_db
-
-
-class MemoryEventStore(EventStorePersistence):
-    events: list = []
-    sequence = 0
-
-    def __init__(self):
-        self.events = []
-
-    def get_event_sequence(self, event: Event) -> int:
-        self.sequence = self.sequence + 1
-        return self.sequence
-
-    def save_event(self, event: StoredEvent):
-        self.events.append(event)
-
-    def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[ASN]
-    ) -> list[StoredEvent]:
-        return self.events
 
 
 def test_registers_asn(faker: Faker):
@@ -134,7 +109,9 @@ def test_records_peeringdb_id_change_as_separate_event(faker):
     assert update_event.event_type == "ASNPeeringDbIdChanged"
 
 
-def build_app(es_db: EventStorePersistence = None) -> tuple[IXPTracker, EventStore]:
+def build_app(
+    es_db: EventStorePersistence | None = None,
+) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(ASNList())
     app = IXPTracker(es)
