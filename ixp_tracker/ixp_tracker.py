@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from uuid import uuid4, UUID
-
+from typing import TypedDict
+from uuid import uuid4
 from ixp_tracker.event_store import (
     EventStore,
     Projection,
@@ -67,8 +67,22 @@ class IXPActiveInPeeringDb(Event):
 
 
 @dataclass
+class IXPMemberDetails:
+    created_date: datetime
+    updated_date: datetime
+    last_active: datetime
+    is_rs_peer: bool
+    port_speed: int
+
+
+@dataclass
 class IXPMemberAdded(Event):
-    member_id: str
+    asn: int
+    created_date: str
+    updated_date: str
+    last_active: str
+    is_rs_peer: bool
+    port_speed: int
 
 
 class IXP(Aggregate):
@@ -86,7 +100,7 @@ class IXP(Aggregate):
     anchor_host: bool = False
     org_id: int
     physical_locations: int | None
-    member_ids: list[UUID] = []
+    members: dict[int, IXPMemberDetails]
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -103,6 +117,7 @@ class IXP(Aggregate):
         self.anchor_host = event.anchor_host
         self.org_id = event.org_id
         self.physical_locations = event.physical_locations
+        self.members = {}
 
     def updated(self, event: IXPUpdated):
         if not isinstance(event.name, ValueNotChanged):
@@ -134,11 +149,18 @@ class IXP(Aggregate):
     def active_in_peering_db(self, event: IXPActiveInPeeringDb):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
-    def get_members(self) -> list[UUID]:
-        return self.member_ids
+    def get_members(self) -> dict[int, IXPMemberDetails]:
+        return self.members
 
     def member_added(self, event: IXPMemberAdded):
-        self.member_ids.append(UUID(event.member_id))
+        details = IXPMemberDetails(
+            datetime.strptime(event.created_date, DATE_FORMAT),
+            datetime.strptime(event.updated_date, DATE_FORMAT),
+            datetime.strptime(event.last_active, DATE_FORMAT),
+            event.is_rs_peer,
+            event.port_speed,
+        )
+        self.members[event.asn] = details
 
 
 class NetworkType(Enum):
@@ -189,17 +211,6 @@ class ASNPeeringDbIdChanged(Event):
     peeringdb_id: int
 
 
-@dataclass
-class IXPMemberCreated(Event):
-    ixp_id: str
-    asn_id: str
-    created_date: str
-    updated_date: str
-    last_active: str
-    is_rs_peer: bool
-    port_speed: int
-
-
 IXP_TRACKER_EVENT_MAP = {
     AnchorHostChange.__name__: AnchorHostChange,
     ASNCreated.__name__: ASNCreated,
@@ -208,8 +219,8 @@ IXP_TRACKER_EVENT_MAP = {
     ManrsStatusChange.__name__: ManrsStatusChange,
     IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
     IXPCreated.__name__: IXPCreated,
-    IXPMemberCreated.__name__: IXPMemberCreated,
     IXPUpdated.__name__: IXPUpdated,
+    IXPMemberAdded.__name__: IXPMemberAdded,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
 }
 
@@ -243,25 +254,6 @@ class ASN(Aggregate):
 
     def peering_db_id_changed(self, event: ASNPeeringDbIdChanged):
         self.peeringdb_id = event.peeringdb_id
-
-
-class IXPMember(Aggregate):
-    ixp_id: UUID
-    asn_id: UUID
-    created_date: datetime
-    updated_date: datetime
-    last_active: datetime
-    is_rs_peer: bool
-    port_speed: int
-
-    def created(self, event: IXPMemberCreated):
-        self.ixp_id = UUID(event.ixp_id)
-        self.asn_id = UUID(event.asn_id)
-        self.created_date = datetime.strptime(event.created_date, DATE_FORMAT)
-        self.updated_date = datetime.strptime(event.updated_date, DATE_FORMAT)
-        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
-        self.is_rs_peer = event.is_rs_peer
-        self.port_speed = event.port_speed
 
 
 class IXPIdMapProjection(Projection):
@@ -309,6 +301,15 @@ class ASNList(Projection):
             asn=asn,
         )
         asn_map.save()
+
+
+class MemberImportData(TypedDict):
+    asn: int
+    created_date: datetime
+    updated_date: datetime
+    last_active: datetime
+    is_rs_peer: bool
+    port_speed: int
 
 
 class IXPTracker:
@@ -464,36 +465,27 @@ class IXPTracker:
             asn.peering_db_id_changed(event)
         return asn
 
-    def register_member(
+    def import_members(
         self,
         ixp: IXP,
-        as_number: int,
-        created_date: datetime,
-        updated_date: datetime,
-        processing_date: datetime,
-        is_rs_peer: bool,
-        port_speed: int,
+        ixp_data: list[MemberImportData],
     ):
-        as_entity = self.get_asn(as_number)
-        if as_entity is None:
-            return None
-        member = IXPMember(id=uuid4())
-        event = IXPMemberCreated(
-            member,
-            str(ixp.id),
-            str(as_entity.id),
-            stringify_date(created_date),
-            stringify_date(updated_date),
-            stringify_date(processing_date),
-            is_rs_peer,
-            port_speed,
-        )
-        self.es.store(event)
-        member.created(event)
-        event = IXPMemberAdded(ixp, str(member.id))
-        self.es.store(event)
-        ixp.member_added(event)
-        return member
+        for member in ixp_data:
+            as_entity = self.get_asn(member["asn"])
+            if as_entity is None:
+                continue
+            event = IXPMemberAdded(
+                ixp,
+                member["asn"],
+                stringify_date(member["created_date"]),
+                stringify_date(member["updated_date"]),
+                stringify_date(member["last_active"]),
+                member["is_rs_peer"],
+                member["port_speed"],
+            )
+            self.es.store(event)
+            ixp.member_added(event)
+        return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
         try:
@@ -514,9 +506,6 @@ class IXPTracker:
             return self.es.get_aggregate(asn_map.aggregate_id, ASN)
         except ASNMap.DoesNotExist:
             return None
-
-    def get_all_members(self):
-        return self.es.get_all(IXPMember)
 
 
 def stringify_date(date_value: datetime) -> str:

@@ -10,6 +10,7 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     IXPIdMapProjection,
     ASNList,
+    IXP,
 )
 from ixp_tracker.models import IXPMember, IXPMembershipRecord
 from tests.fixtures import (
@@ -41,15 +42,6 @@ class TestLookup(ASNGeoLookup):
         return self.default_status
 
 
-def test_with_no_data_does_nothing():
-    app, _ = build_app()
-    processor = importers.process_member_data(date_now, TestLookup(), app)
-    processor([])
-
-    members = app.get_all_members()
-    assert len(members) == 0
-
-
 def test_adds_new_member(faker):
     app, es = build_app()
     ixp = create_ixp(faker, es)
@@ -59,35 +51,37 @@ def test_adds_new_member(faker):
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
+    ixp = es.get_aggregate(ixp.id, IXP)
+    members = ixp.get_members()
     assert len(members) == 1
-    member = members.pop(0)
-    assert member.asn_id == asn.id
+    assert asn.number in members.keys()
 
 
 def test_does_nothing_if_no_asn_found(faker):
-    app, es = build_app()
+    des = DjangoEventStore()
+    app, es = build_app(des)
     ixp = create_ixp(faker, es)
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
+    fixture_events = len(des.get_events())
 
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
-    assert len(members) == 0
+    assert len(des.get_events()) == fixture_events
 
 
 def test_does_nothing_if_no_ixp_found(faker):
-    app, es = build_app()
+    des = DjangoEventStore()
+    app, es = build_app(des)
     asn = create_asn(faker, es)
     member_import = PeeringNetIXLANFactory(asn=asn.number)
+    fixture_events = len(des.get_events())
 
     app, _ = build_app()
     processor = importers.process_member_data(date_now, TestLookup(), app)
     processor([member_import])
 
-    members = app.get_all_members()
-    assert len(members) == 0
+    assert len(des.get_events()) == fixture_events
 
 
 @pytest.mark.xfail

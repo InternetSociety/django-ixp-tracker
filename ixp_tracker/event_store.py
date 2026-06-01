@@ -73,6 +73,9 @@ class EventStorePersistence(ABC):
     def get_all(self, aggregate_type: type[T]) -> list[UUID]:
         pass
 
+    def get_events(self) -> list[StoredEvent]:
+        pass
+
 
 class EventStore:
     listeners: list[Projection]
@@ -165,3 +168,6 @@ class DjangoEventStore(EventStorePersistence):
             .values_list("aggregate_id", flat=True)
             .distinct()
         )
+
+    def get_events(self) -> list[StoredEvent]:
+        return list(StoredEvent.objects.all())
