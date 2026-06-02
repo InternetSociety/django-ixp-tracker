@@ -13,7 +13,7 @@ from ixp_tracker.ixp_tracker import (
     IXPIdMapProjection,
     IXP_TRACKER_EVENT_MAP,
 )
-from tests.fixtures import create_ixp, MemoryEventStore
+from tests.fixtures import create_ixp, MemoryEventStore, TestLookup
 
 pytestmark = pytest.mark.django_db
 
@@ -259,5 +259,5 @@ def build_app(
 ) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es)
+    app = IXPTracker(es, TestLookup())
     return app, es

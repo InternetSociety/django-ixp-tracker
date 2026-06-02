@@ -39,7 +39,7 @@ def import_data(
     processing_date: datetime | None = None,
     page_limit: int = 200,
 ):
-    es_app = build_app()
+    es_app = build_app(additional_data)
     if processing_date is None:
         processing_date = datetime.now(timezone.utc)
         import_ixps(processing_date, additional_data, es_app)
@@ -162,13 +162,13 @@ def import_ixps(
     )
 
 
-def build_app() -> IXPTracker | None:
+def build_app(geo_lookup: ASNGeoLookup) -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
         return None
     id_maps = IXPIdMapProjection()
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(id_maps)
-    app = IXPTracker(es)
+    app = IXPTracker(es, geo_lookup)
     return app
 
 
@@ -409,7 +409,7 @@ def process_member_data(
                 if ixp_entity is None:
                     continue
                 import_members = event_sourcing_app.import_members(
-                    ixp_entity, ixp_data[ixp]
+                    ixp_entity, ixp_data[ixp], processing_date
                 )
                 if import_members is None:
                     logger.warning("Cannot import IXP members", extra=log_data)

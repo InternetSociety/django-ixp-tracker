@@ -1,8 +1,10 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import TypedDict, Any
 from uuid import uuid4
+
+from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.event_store import (
     EventStore,
     Projection,
@@ -68,21 +70,49 @@ class IXPActiveInPeeringDb(Event):
 
 @dataclass
 class IXPMemberDetails:
-    created_date: datetime
-    updated_date: datetime
+    date_joined: datetime
+    date_updated: datetime
     last_active: datetime
+    is_rs_peer: bool
+    port_speed: int
+    date_left: datetime | None = None
+
+
+@dataclass
+class IXPMemberJoined(Event):
+    asn: int
+    date_joined: str
+    date_updated: str
+    last_active: str
     is_rs_peer: bool
     port_speed: int
 
 
 @dataclass
-class IXPMemberAdded(Event):
+class IXPMemberUpdated(Event):
     asn: int
-    created_date: str
-    updated_date: str
+    date_joined: str | ValueNotChanged = ValueNotChanged()
+    date_left: str | ValueNotChanged = ValueNotChanged()
+    date_updated: str | ValueNotChanged = ValueNotChanged()
+    port_speed: int | ValueNotChanged = ValueNotChanged()
+
+
+@dataclass
+class IXPMemberActiveInPeeringDb(Event):
+    asn: int
     last_active: str
+
+
+@dataclass
+class RsPeeringStatusChange(Event):
+    asn: int
     is_rs_peer: bool
-    port_speed: int
+
+
+@dataclass
+class IXPMemberLeft(Event):
+    asn: int
+    date_left: str
 
 
 class IXP(Aggregate):
@@ -149,18 +179,54 @@ class IXP(Aggregate):
     def active_in_peering_db(self, event: IXPActiveInPeeringDb):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
-    def get_members(self) -> dict[int, IXPMemberDetails]:
-        return self.members
+    def get_members(
+        self, include_inactive: bool = False
+    ) -> dict[int, IXPMemberDetails]:
+        if include_inactive:
+            return self.members
+        member_list = {}
+        for member_asn in self.members.keys():
+            member = self.members[member_asn]
+            if member.date_left is None:
+                member_list[member_asn] = member
+        return member_list
 
-    def member_added(self, event: IXPMemberAdded):
+    def member_joined(self, event: IXPMemberJoined):
         details = IXPMemberDetails(
-            datetime.strptime(event.created_date, DATE_FORMAT),
-            datetime.strptime(event.updated_date, DATE_FORMAT),
+            datetime.strptime(event.date_joined, DATE_FORMAT),
+            datetime.strptime(event.date_updated, DATE_FORMAT),
             datetime.strptime(event.last_active, DATE_FORMAT),
             event.is_rs_peer,
             event.port_speed,
         )
         self.members[event.asn] = details
+
+    def member_updated(self, event: IXPMemberUpdated):
+        if not isinstance(event.date_joined, ValueNotChanged):
+            self.members[event.asn].date_joined = datetime.strptime(
+                event.date_joined, DATE_FORMAT
+            )
+        if not isinstance(event.date_updated, ValueNotChanged):
+            self.members[event.asn].date_updated = datetime.strptime(
+                event.date_updated, DATE_FORMAT
+            )
+        if not isinstance(event.port_speed, ValueNotChanged):
+            self.members[event.asn].port_speed = event.port_speed
+        if not isinstance(event.date_left, ValueNotChanged):
+            self.members[event.asn].date_left = None
+
+    def member_active_in_peering_db(self, event: IXPMemberActiveInPeeringDb):
+        self.members[event.asn].last_active = datetime.strptime(
+            event.last_active, DATE_FORMAT
+        )
+
+    def rs_peering_status_change(self, event: RsPeeringStatusChange):
+        self.members[event.asn].is_rs_peer = event.is_rs_peer
+
+    def member_left(self, event: IXPMemberLeft):
+        self.members[event.asn].date_left = datetime.strptime(
+            event.date_left, DATE_FORMAT
+        )
 
 
 class NetworkType(Enum):
@@ -220,8 +286,12 @@ IXP_TRACKER_EVENT_MAP = {
     IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
     IXPCreated.__name__: IXPCreated,
     IXPUpdated.__name__: IXPUpdated,
-    IXPMemberAdded.__name__: IXPMemberAdded,
+    IXPMemberActiveInPeeringDb.__name__: IXPMemberActiveInPeeringDb,
+    IXPMemberJoined.__name__: IXPMemberJoined,
+    IXPMemberLeft.__name__: IXPMemberLeft,
+    IXPMemberUpdated.__name__: IXPMemberUpdated,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
+    RsPeeringStatusChange.__name__: RsPeeringStatusChange,
 }
 
 
@@ -307,6 +377,7 @@ class MemberImportData(TypedDict):
     asn: int
     created_date: datetime
     updated_date: datetime
+    # TODO We're already passing in the processing_date separately so perhaps we should remove this here and just use that
     last_active: datetime
     is_rs_peer: bool
     port_speed: int
@@ -314,9 +385,12 @@ class MemberImportData(TypedDict):
 
 class IXPTracker:
     es: EventStore
+    # TODO We only need the ASN lookup for now but we should probably move the other lookups into the app too (e.g. MANRS, RIPE Anchors)
+    geo_lookup: ASNGeoLookup
 
-    def __init__(self, es: EventStore):
+    def __init__(self, es: EventStore, geo_lookup: ASNGeoLookup):
         self.es = es
+        self.geo_lookup = geo_lookup
 
     def register_ixp(
         self,
@@ -473,22 +547,72 @@ class IXPTracker:
         self,
         ixp: IXP,
         ixp_data: list[MemberImportData],
+        processing_date: datetime,
     ):
+        existing_members = ixp.get_members(True)
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
             if as_entity is None:
                 continue
-            event = IXPMemberAdded(
-                ixp,
-                member["asn"],
-                stringify_date(member["created_date"]),
-                stringify_date(member["updated_date"]),
-                stringify_date(member["last_active"]),
-                member["is_rs_peer"],
-                member["port_speed"],
+            existing_member = existing_members.get(member["asn"])
+            member_has_rejoined = (
+                existing_member
+                and existing_member.date_left is not None
+                and existing_member.date_left < member["created_date"]
             )
-            self.es.store(event)
-            ixp.member_added(event)
+            if existing_member is None or member_has_rejoined:
+                join_event = IXPMemberJoined(
+                    ixp,
+                    member["asn"],
+                    stringify_date(member["created_date"]),
+                    stringify_date(member["updated_date"]),
+                    stringify_date(member["last_active"]),
+                    member["is_rs_peer"],
+                    member["port_speed"],
+                )
+                self.es.store(join_event)
+                ixp.member_joined(join_event)
+            else:
+                updates: dict[str, Any] = {}
+                # If we already have an inactive member, but it's end_date is after the start_date we're importing,
+                # then we just unset the end_date, which makes the member active and keeps the original start_date
+                if (
+                    existing_member.date_left is not None
+                    and existing_member.date_left > member["created_date"]
+                ):
+                    updates["date_left"] = None
+                elif member["created_date"] != existing_member.date_joined:
+                    updates["date_joined"] = stringify_date(member["created_date"])
+                if member["updated_date"] != existing_member.date_updated:
+                    updates["date_updated"] = stringify_date(member["updated_date"])
+                if member["port_speed"] != existing_member.port_speed:
+                    updates["port_speed"] = member["port_speed"]
+                if len(updates.keys()) > 0:
+                    update_event = IXPMemberUpdated(ixp, member["asn"], **updates)
+                    self.es.store(update_event)
+                    ixp.member_updated(update_event)
+                if member["is_rs_peer"] != existing_member.is_rs_peer:
+                    rs_peer_event = RsPeeringStatusChange(
+                        ixp, member["asn"], member["is_rs_peer"]
+                    )
+                    self.es.store(rs_peer_event)
+                    ixp.rs_peering_status_change(rs_peer_event)
+                active_event = IXPMemberActiveInPeeringDb(
+                    ixp, member["asn"], stringify_date(member["last_active"])
+                )
+                self.es.store(active_event)
+                ixp.member_active_in_peering_db(active_event)
+
+        members = ixp.get_members()
+        members_left = check_if_members_have_left(
+            members, processing_date, self.geo_lookup
+        )
+        for member_left in members_left:
+            left_event = IXPMemberLeft(
+                ixp, member_left[0], stringify_date(member_left[1])
+            )
+            self.es.store(left_event)
+            ixp.member_left(left_event)
         return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
@@ -516,3 +640,32 @@ def stringify_date(date_value: datetime) -> str:
     if date_value.tzinfo is None:
         date_value = date_value.replace(tzinfo=timezone.utc)
     return date_value.strftime(DATE_FORMAT)
+
+
+def check_if_members_have_left(
+    members: dict[int, IXPMemberDetails],
+    processing_date: datetime,
+    geo_lookup: ASNGeoLookup,
+) -> list[tuple[int, datetime]]:
+    start_of_month = processing_date.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    members_left: list[tuple[int, datetime]] = []
+    for member_asn in members.keys():
+        member = members[member_asn]
+        if member.last_active < start_of_month:
+            start_of_month_after_last_active = (
+                member.last_active.replace(day=1) + timedelta(days=33)
+            ).replace(day=1)
+            end_of_month = start_of_month_after_last_active - timedelta(days=1)
+            members_left.append((member_asn, end_of_month))
+        if (
+            member.date_left is None
+            and geo_lookup.get_iso2_country(member_asn, processing_date) == "ZZ"
+            and geo_lookup.get_status(member_asn, processing_date) != "assigned"
+        ):
+            end_of_last_month_active = member.last_active.replace(day=1) - timedelta(
+                days=1
+            )
+            members_left.append((member_asn, end_of_last_month_active))
+    return members_left

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import pytest
 from faker import Faker
 
+from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.event_store import (
     EventStorePersistence,
     EventStore,
@@ -12,8 +13,15 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     ASNList,
     IXPIdMapProjection,
+    MemberImportData,
 )
-from tests.fixtures import create_ixp, create_asn, MemoryEventStore
+from tests.fixtures import (
+    create_ixp,
+    create_asn,
+    MemoryEventStore,
+    create_member,
+    TestLookup,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -30,22 +38,9 @@ def test_imports_member(faker: Faker):
     assert len(ixp.get_members()) == 0
 
     imported = app.import_members(
-        ixp,
-        [
-            {
-                "asn": asn.number,
-                "created_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "updated_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "last_active": date_now,
-                "is_rs_peer": faker.boolean(),
-                "port_speed": faker.random_number(digits=5),
-            },
-        ],
+        ixp, [create_member_import_data(faker, date_now, asn.number)], date_now
     )
+
     members = imported.get_members()
     assert len(members) == 1
     assert asn.number in members.keys()
@@ -64,31 +59,10 @@ def test_imports_multiple_members(faker: Faker):
     imported = app.import_members(
         ixp,
         [
-            {
-                "asn": asn1.number,
-                "created_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "updated_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "last_active": date_now,
-                "is_rs_peer": faker.boolean(),
-                "port_speed": faker.random_number(digits=5),
-            },
-            {
-                "asn": asn2.number,
-                "created_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "updated_date": faker.date_time_between(
-                    start_date="-1d", tzinfo=timezone.utc
-                ),
-                "last_active": date_now,
-                "is_rs_peer": faker.boolean(),
-                "port_speed": faker.random_number(digits=5),
-            },
+            create_member_import_data(faker, date_now, asn1.number),
+            create_member_import_data(faker, date_now, asn2.number),
         ],
+        date_now,
     )
 
     members = imported.get_members().keys()
@@ -97,11 +71,124 @@ def test_imports_multiple_members(faker: Faker):
     assert asn2.number in members
 
 
+def test_adds_new_membership_for_existing_member_marked_as_left(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    membership_properties = {
+        "start_date": datetime(year=2018, month=1, day=3),
+        "end_date": datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+    member_import_data = create_member_import_data(faker, date_now, asn.number)
+
+    ixp = app.import_members(ixp, [member_import_data], date_now)
+
+    updated = ixp.get_members().get(asn.number)
+    assert updated.date_joined > membership_properties["end_date"]
+
+
+def test_extends_membership_for_member_marked_as_left_if_created_before_date_left(
+    faker,
+):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    membership_properties = {
+        "start_date": datetime(year=2018, month=1, day=3, tzinfo=timezone.utc),
+        "end_date": datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+    member_import_data = create_member_import_data(
+        faker,
+        date_now,
+        asn.number,
+        created_date=datetime(year=2018, month=6, day=18, tzinfo=timezone.utc),
+    )
+
+    ixp = app.import_members(ixp, [member_import_data], date_now)
+
+    updated = ixp.get_members().get(asn.number)
+    assert updated.date_joined == membership_properties["start_date"]
+    assert updated.date_left is None
+
+
+def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_memberships(
+    faker,
+):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    membership_properties = {
+        "start_date": datetime(year=2023, month=1, day=13, tzinfo=timezone.utc),
+        "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+
+    date_after_date_left = datetime(2023, 9, 24, tzinfo=timezone.utc)
+    member_data_with_created_date_after_date_left = create_member_import_data(
+        faker, date_now, asn.number, created_date=date_after_date_left
+    )
+
+    ixp = app.import_members(
+        ixp,
+        [
+            member_data_with_created_date_after_date_left,
+            member_data_with_created_date_after_date_left,
+        ],
+        date_now,
+    )
+
+    assert len(ixp.get_members()) == 1
+
+
+def test_do_not_add_new_membership_for_same_created_date(faker):
+    created_date = datetime(year=2023, month=1, day=13, tzinfo=timezone.utc)
+
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    membership_properties = {
+        "start_date": created_date,
+        "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+
+    # As we always create a new membership record if the most recent one has ended, for multiple ASN-IX combos this
+    # could result in multiple new memberships being created
+    member_import = create_member_import_data(
+        faker, date_now, asn.number, created_date=created_date
+    )
+
+    ixp = app.import_members(ixp, [member_import], date_now)
+
+    assert len(ixp.get_members()) == 1
+
+
 def build_app(
     es_db: EventStorePersistence | None = None,
+    geo_lookup: ASNGeoLookup | None = None,
 ) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
-    app = IXPTracker(es)
+    app = IXPTracker(es, geo_lookup or TestLookup())
     return app, es
+
+
+def create_member_import_data(
+    faker, date_now, asn: int, created_date: datetime | None = None
+) -> MemberImportData:
+    return {
+        "asn": asn,
+        "created_date": created_date
+        or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        "last_active": date_now,
+        "is_rs_peer": faker.boolean(),
+        "port_speed": faker.random_number(digits=5),
+    }

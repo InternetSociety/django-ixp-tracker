@@ -7,7 +7,7 @@ import factory
 from faker import Faker
 from typing_extensions import NotRequired
 
-from ixp_tracker.data_lookup import AdditionalDataSources
+from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import (
     Event,
     ValueNotChanged,
@@ -30,6 +30,8 @@ from ixp_tracker.ixp_tracker import (
     PeeringPolicy,
     ASNCreated,
     stringify_date,
+    IXPMemberJoined,
+    IXPMemberLeft,
 )
 import ixp_tracker.models as legacy
 from ixp_tracker.models import (
@@ -418,7 +420,7 @@ def build_app() -> IXPTracker:
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(ASNList())
     es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es)
+    app = IXPTracker(es, TestLookup())
     return app
 
 
@@ -449,12 +451,13 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
     return es.get_aggregate(ixp.id, IXP)
 
 
-def create_asn(faker: Faker, es: EventStore) -> ASN:
+def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) -> ASN:
     as_number = faker.random_number(digits=5)
     network_type = faker.random_element(NetworkType)
     name = faker.company()
     peering_policy = faker.random_element(PeeringPolicy)
     peeringdb_id = faker.random_number(digits=3)
+    country_code = country_code or faker.country_code()
     asn = ASN(id=uuid4())
     event = ASNCreated(
         asn,
@@ -463,7 +466,63 @@ def create_asn(faker: Faker, es: EventStore) -> ASN:
         network_type.value,
         peering_policy.value,
         peeringdb_id,
-        faker.country_code(),
+        country_code,
     )
     es.store(event)
     return es.get_aggregate(asn.id, ASN)
+
+
+def create_member(
+    faker: Faker, es: EventStore, ixp: IXP, asn: ASN, overrides=None
+) -> IXP:
+    overrides = overrides or {}
+    properties = {
+        "start_date": overrides.get("start_date")
+        or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        "updated_date": overrides.get("updated_date")
+        or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        "last_active": overrides.get("last_active")
+        or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        "is_rs_peer": faker.boolean(),
+        "port_speed": faker.random_number(digits=5),
+    }
+    event = IXPMemberJoined(
+        ixp,
+        asn.number,
+        stringify_date(properties["start_date"]),
+        stringify_date(properties["updated_date"]),
+        stringify_date(properties["last_active"]),
+        properties["is_rs_peer"],
+        properties["port_speed"],
+    )
+    es.store(event)
+    ixp.member_joined(event)
+    if overrides.get("end_date") is not None:
+        left_event = IXPMemberLeft(
+            ixp, asn.number, stringify_date(overrides.get("end_date"))
+        )
+        es.store(left_event)
+        ixp.member_left(left_event)
+    return ixp
+
+
+class TestLookup(ASNGeoLookup):
+    __test__ = False
+
+    def __init__(self, default_status: str = "assigned", default_country: str = "US"):
+        self.default_status = default_status
+        self.default_country = default_country
+
+    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
+        return self.default_country
+
+    def get_status(self, asn: int, as_at: datetime) -> str:
+        assert as_at <= datetime.now(timezone.utc)
+        assert asn > 0
+        return self.default_status
+
+    def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return []
+
+    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return []

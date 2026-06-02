@@ -13,7 +13,7 @@ from ixp_tracker.ixp_tracker import (
     PeeringPolicy,
     ASNList,
 )
-from tests.fixtures import create_asn, MemoryEventStore
+from tests.fixtures import create_asn, MemoryEventStore, TestLookup
 
 pytestmark = pytest.mark.django_db
 
@@ -114,5 +114,5 @@ def build_app(
 ) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(ASNList())
-    app = IXPTracker(es)
+    app = IXPTracker(es, TestLookup())
     return app, es
