@@ -25,7 +25,7 @@ def test_registers_ixp(faker: Faker):
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
     peeringdb_id = faker.random_number(digits=3)
-    ixp = app.register_ixp(
+    ixp = app.import_ixp(
         name,
         long_name,
         city,
@@ -59,19 +59,19 @@ def test_updates_main_ixp_details(faker):
     new_city = faker.city()
     new_website = faker.url(schemes=["https"])
     new_country = faker.country_code()
-    app.update_ixp(
-        ixp,
+    app.import_ixp(
         new_name,
         new_long_name,
         new_city,
+        ixp.peeringdb_id,
         new_website,
         new_country,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        faker.random_number(digits=3),
         ixp.manrs_participant,
         ixp.anchor_host,
+        faker.random_number(digits=3),
         ixp.physical_locations,
     )
 
@@ -86,19 +86,19 @@ def test_does_not_update_fields_if_not_changed(faker):
 
     ixp = create_ixp(faker, es)
 
-    app.update_ixp(
-        ixp,
+    app.import_ixp(
         ixp.name + "X",
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        False,
+        False,
         ixp.org_id,
-        False,
-        False,
         ixp.physical_locations,
     )
 
@@ -121,19 +121,19 @@ def test_always_updates_last_active(faker):
     ixp = create_ixp(faker, es)
 
     processing_date = faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)
-    ixp = app.update_ixp(
-        ixp,
+    ixp = app.import_ixp(
         ixp.name,
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         processing_date,
+        False,
+        False,
         ixp.org_id,
-        False,
-        False,
         ixp.physical_locations,
     )
 
@@ -149,19 +149,19 @@ def test_registers_change_in_manrs_status(faker):
     ixp = create_ixp(faker, es)
     ixp.manrs_participant = False
 
-    ixp = app.update_ixp(
-        ixp,
+    ixp = app.import_ixp(
         ixp.name,
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        ixp.org_id,
         True,
         False,
+        ixp.org_id,
         ixp.physical_locations,
     )
 
@@ -176,19 +176,19 @@ def test_registers_change_in_anchor_host(faker):
     app, es = build_app(mes)
     ixp = create_ixp(faker, es)
 
-    ixp = app.update_ixp(
-        ixp,
+    ixp = app.import_ixp(
         ixp.name,
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        ixp.org_id,
         ixp.manrs_participant,
         True,
+        ixp.org_id,
         ixp.physical_locations,
     )
 
@@ -203,19 +203,19 @@ def test_registers_change_in_location_count_if_both_values_exist(faker):
     app, es = build_app(mes)
     ixp = create_ixp(faker, es)
 
-    ixp = app.update_ixp(
-        ixp,
+    ixp = app.import_ixp(
         ixp.name,
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        ixp.org_id,
         ixp.manrs_participant,
         ixp.anchor_host,
+        ixp.org_id,
         (ixp.physical_locations + 1),
     )
 
@@ -231,19 +231,19 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     ixp = create_ixp(faker, es)
     original_value = ixp.physical_locations
 
-    ixp = app.update_ixp(
-        ixp,
+    ixp = app.import_ixp(
         ixp.name,
         ixp.long_name,
         ixp.city,
+        ixp.peeringdb_id,
         ixp.website,
         ixp.country_code,
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        ixp.org_id,
         ixp.manrs_participant,
         ixp.anchor_host,
+        ixp.org_id,
         None,
     )
 

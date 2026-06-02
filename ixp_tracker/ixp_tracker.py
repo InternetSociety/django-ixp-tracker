@@ -377,22 +377,19 @@ class MemberImportData(TypedDict):
     asn: int
     created_date: datetime
     updated_date: datetime
-    # TODO We're already passing in the processing_date separately so perhaps we should remove this here and just use that
-    last_active: datetime
     is_rs_peer: bool
     port_speed: int
 
 
 class IXPTracker:
     es: EventStore
-    # TODO We only need the ASN lookup for now but we should probably move the other lookups into the app too (e.g. MANRS, RIPE Anchors)
     geo_lookup: ASNGeoLookup
 
     def __init__(self, es: EventStore, geo_lookup: ASNGeoLookup):
         self.es = es
         self.geo_lookup = geo_lookup
 
-    def register_ixp(
+    def import_ixp(
         self,
         name: str,
         long_name: str,
@@ -408,6 +405,23 @@ class IXPTracker:
         org_id: int,
         physical_locations: int,
     ):
+        exists = self.find_by_peeringdb_id(peeringdb_id)
+        if exists:
+            return self._update_ixp(
+                exists,
+                name,
+                long_name,
+                city,
+                website,
+                country_code,
+                created,
+                last_updated,
+                last_active,
+                org_id,
+                manrs_participant,
+                anchor_host,
+                physical_locations,
+            )
         active_status = True
         ixp = IXP(id=uuid4())
         event = IXPCreated(
@@ -431,7 +445,7 @@ class IXPTracker:
         ixp.created(event)
         return ixp
 
-    def update_ixp(
+    def _update_ixp(
         self,
         ixp: IXP,
         name: str,
@@ -492,7 +506,7 @@ class IXPTracker:
         ixp.active_in_peering_db(active_event)
         return ixp
 
-    def register_asn(
+    def import_asn(
         self,
         as_number: int,
         name: str,
@@ -501,47 +515,41 @@ class IXPTracker:
         peeringdb_id: int,
         country_code,
     ):
-        asn = ASN(id=uuid4())
-        event = ASNCreated(
-            asn,
-            as_number,
-            name,
-            network_type.value,
-            peering_policy.value,
-            peeringdb_id,
-            country_code,
-        )
-        self.es.store(event)
-        asn.created(event)
-        return asn
-
-    def update_asn(
-        self,
-        asn: ASN,
-        name: str,
-        network_type: NetworkType,
-        peering_policy: PeeringPolicy,
-        peeringdb_id: int,
-        country_code: str,
-    ):
-        updates = {}
-        if name != asn.name:
-            updates["name"] = name
-        if network_type != asn.network_type:
-            updates["network_type"] = network_type.value
-        if peering_policy != asn.peering_policy:
-            updates["peering_policy"] = peering_policy.value
-        if country_code != asn.country_code:
-            updates["country_code"] = country_code
-        if len(updates.keys()) > 0:
-            event = ASNUpdated(asn, **updates)
+        entity = self.get_asn(as_number)
+        if entity:
+            updates = {}
+            if name != entity.name:
+                updates["name"] = name
+            if network_type != entity.network_type:
+                updates["network_type"] = network_type.value
+            if peering_policy != entity.peering_policy:
+                updates["peering_policy"] = peering_policy.value
+            if country_code != entity.country_code:
+                updates["country_code"] = country_code
+            if len(updates.keys()) > 0:
+                update_event = ASNUpdated(entity, **updates)
+                self.es.store(update_event)
+                entity.updated(update_event)
+            if peeringdb_id != entity.peeringdb_id:
+                peering_id_event = ASNPeeringDbIdChanged(
+                    entity, peeringdb_id=peeringdb_id
+                )
+                self.es.store(peering_id_event)
+                entity.peering_db_id_changed(peering_id_event)
+        else:
+            entity = ASN(id=uuid4())
+            event = ASNCreated(
+                entity,
+                as_number,
+                name,
+                network_type.value,
+                peering_policy.value,
+                peeringdb_id,
+                country_code,
+            )
             self.es.store(event)
-            asn.updated(event)
-        if peeringdb_id != asn.peeringdb_id:
-            peering_id_event = ASNPeeringDbIdChanged(asn, peeringdb_id=peeringdb_id)
-            self.es.store(peering_id_event)
-            asn.peering_db_id_changed(peering_id_event)
-        return asn
+            entity.created(event)
+        return entity
 
     def import_members(
         self,
@@ -566,7 +574,7 @@ class IXPTracker:
                     member["asn"],
                     stringify_date(member["created_date"]),
                     stringify_date(member["updated_date"]),
-                    stringify_date(member["last_active"]),
+                    stringify_date(processing_date),
                     member["is_rs_peer"],
                     member["port_speed"],
                 )
@@ -598,7 +606,7 @@ class IXPTracker:
                     self.es.store(rs_peer_event)
                     ixp.rs_peering_status_change(rs_peer_event)
                 active_event = IXPMemberActiveInPeeringDb(
-                    ixp, member["asn"], stringify_date(member["last_active"])
+                    ixp, member["asn"], stringify_date(processing_date)
                 )
                 self.es.store(active_event)
                 ixp.member_active_in_peering_db(active_event)

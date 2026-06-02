@@ -26,7 +26,7 @@ def test_registers_asn(faker: Faker):
     name = faker.company()
     peering_policy = faker.random_element(PeeringPolicy)
     peeringdb_id = faker.random_number(digits=3)
-    asn = app.register_asn(
+    asn = app.import_asn(
         as_number,
         name,
         network_type,
@@ -52,8 +52,8 @@ def test_updates_asn(faker):
     new_network_policy = faker.random_element(NetworkType)
     new_peering_policy = faker.random_element(PeeringPolicy)
     new_country = faker.country_code()
-    app.update_asn(
-        asn,
+    app.import_asn(
+        asn.number,
         new_name,
         new_network_policy,
         new_peering_policy,
@@ -72,8 +72,8 @@ def test_does_not_update_fields_if_not_changed(faker):
 
     asn = create_asn(faker, es)
 
-    app.update_asn(
-        asn,
+    app.import_asn(
+        asn.number,
         asn.name + "X",
         asn.network_type,
         asn.peering_policy,
@@ -95,8 +95,8 @@ def test_records_peeringdb_id_change_as_separate_event(faker):
 
     asn = create_asn(faker, es)
 
-    app.update_asn(
-        asn,
+    app.import_asn(
+        asn.number,
         asn.name,
         asn.network_type,
         asn.peering_policy,

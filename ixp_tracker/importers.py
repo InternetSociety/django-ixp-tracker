@@ -199,54 +199,32 @@ def process_ixp_data(
                     last_updated = datetime.strptime(
                         ixp_data["updated"], PEERING_DB_DATE_FORMAT
                     ).replace(tzinfo=timezone.utc)
-                    exists = event_sourcing_app.find_by_peeringdb_id(peeringdb_id)
                     physical_locations = (
                         int(ixp_data["fac_count"])
                         if ixp_data.get("fac_count") is not None
                         else None
                     )
-                    if exists:
-                        _ixp = event_sourcing_app.update_ixp(
-                            exists,
-                            ixp_data["name"],
-                            ixp_data["name_long"],
-                            ixp_data["city"],
-                            ixp_data["website"],
-                            ixp_data["country"],
-                            date_created,
-                            last_updated,
-                            processing_date,
-                            int(ixp_data["org_id"]),
-                            ixp_data["id"] in manrs_participants,
-                            ixp_data["id"] in anchor_hosts,
-                            physical_locations,
-                        )
-                        logger.debug(
-                            "Updating IXP record from Peering Db",
-                            extra={"id": ixp_data["id"]},
-                        )
-                        ixps_updated += 1
-                    else:
-                        _ixp = event_sourcing_app.register_ixp(
-                            ixp_data["name"],
-                            ixp_data["name_long"],
-                            ixp_data["city"],
-                            peeringdb_id,
-                            ixp_data["website"],
-                            ixp_data["country"],
-                            date_created,
-                            last_updated,
-                            processing_date,
-                            ixp_data["id"] in manrs_participants,
-                            ixp_data["id"] in anchor_hosts,
-                            int(ixp_data["org_id"]),
-                            physical_locations,
-                        )
-                        logger.debug(
-                            "Creating IXP record from Peering Db",
-                            extra={"id": ixp_data["id"]},
-                        )
-                        ixps_added += 1
+                    _ixp = event_sourcing_app.import_ixp(
+                        ixp_data["name"],
+                        ixp_data["name_long"],
+                        ixp_data["city"],
+                        peeringdb_id,
+                        ixp_data["website"],
+                        ixp_data["country"],
+                        date_created,
+                        last_updated,
+                        processing_date,
+                        ixp_data["id"] in manrs_participants,
+                        ixp_data["id"] in anchor_hosts,
+                        int(ixp_data["org_id"]),
+                        physical_locations,
+                    )
+                    logger.debug(
+                        "Importing IXP record from Peering Db",
+                        extra={"id": ixp_data["id"]},
+                    )
+                    ixps_updated += 1
+
                 else:
                     _, created = models.IXP.objects.update_or_create(
                         peeringdb_id=ixp_data["id"],
@@ -313,7 +291,6 @@ def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker | None = None):
                 last_updated = dateutil.parser.isoparse(asn_data["updated"])
                 country_code = geo_lookup.get_iso2_country(asn, last_updated)
                 if event_sourcing_app:
-                    exists = event_sourcing_app.get_asn(asn)
                     try:
                         network_type = NetworkType(asn_data["info_type"])
                     except ValueError:
@@ -322,23 +299,14 @@ def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker | None = None):
                         peering_policy = PeeringPolicy(asn_data["policy_general"])
                     except ValueError:
                         peering_policy = PeeringPolicy.UNKNOWN
-                    if exists:
-                        event_sourcing_app.update_asn(
-                            exists,
-                            asn_data["name"],
-                            network_type,
-                            peering_policy,
-                            country_code,
-                        )
-                    else:
-                        event_sourcing_app.register_asn(
-                            asn,
-                            asn_data["name"],
-                            network_type,
-                            peering_policy,
-                            asn_data["id"],
-                            country_code,
-                        )
+                    event_sourcing_app.import_asn(
+                        asn,
+                        asn_data["name"],
+                        network_type,
+                        peering_policy,
+                        asn_data["id"],
+                        country_code,
+                    )
                 else:
                     models.ASN.objects.update_or_create(
                         peeringdb_id=asn_data["id"],

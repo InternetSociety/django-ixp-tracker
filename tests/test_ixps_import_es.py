@@ -44,7 +44,7 @@ def test_updates_an_existing_ixp(faker):
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
-    app.register_ixp(
+    app.import_ixp(
         name,
         long_name,
         city,

@@ -1,6 +1,3 @@
-import json
-from datetime import datetime, timezone
-
 import pytest
 import responses
 
@@ -8,19 +5,9 @@ from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
 from ixp_tracker import importers
 from ixp_tracker.ixp_tracker import NetworkType, PeeringPolicy
 
-from .fixtures import ASNFactory, PeeringASNFactory, build_app
+from .fixtures import PeeringASNFactory, build_app, TestLookup
 
 pytestmark = pytest.mark.django_db
-
-
-class TestLookup:
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.now(timezone.utc)
-        assert asn > 0
-        return "AU"
-
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        pass
 
 
 def test_with_empty_response_does_nothing():
@@ -66,32 +53,27 @@ def test_uses_defaults_for_network_type_and_peering_policy_if_invalid():
     assert asn.peering_policy == PeeringPolicy.UNKNOWN
 
 
-def test_updates_existing_data():
-    updated_asn_data = PeeringASNFactory()
-    ASNFactory(
-        number=updated_asn_data["asn"],
-        peeringdb_id=updated_asn_data["id"],
-        last_updated=datetime(2024, 5, 1, tzinfo=timezone.utc),
+def test_updates_existing_data(faker):
+    name = faker.nic_handle(suffix="FAKE")
+    updated_asn_data = PeeringASNFactory(name=(name + "new"))
+    app = build_app()
+    app.import_asn(
+        updated_asn_data["asn"],
+        name,
+        NetworkType.CONTENT,
+        PeeringPolicy.OPEN,
+        updated_asn_data["id"],
+        faker.country_code(),
     )
-    with responses.RequestsMock() as rsps:
-        app = build_app()
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL
-            + "/net?updated__gte=2024-05-01&limit=200&skip=0",
-            body=json.dumps({"data": [updated_asn_data]}),
-        )
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL
-            + "/net?updated__gte=2024-05-01&limit=200&skip=200",
-            body=json.dumps({"data": []}),
-        )
-        importers.import_asns(TestLookup(), False, es_app=app)
 
-        asns = app.get_all_asns()
-        assert len(asns) == 1
-        updated = asns.pop(0)
-        assert updated.name == updated_asn_data["name"]
-        assert updated.country_code == "AU"
+    processor = importers.process_asn_data(TestLookup(default_country="AU"), app)
+    processor([updated_asn_data])
+
+    asns = app.get_all_asns()
+    assert len(asns) == 1
+    updated = asns.pop(0)
+    assert updated.name == updated_asn_data["name"]
+    assert updated.country_code == "AU"
 
 
 def test_handles_errors_with_source_data():

@@ -38,7 +38,7 @@ def test_imports_member(faker: Faker):
     assert len(ixp.get_members()) == 0
 
     imported = app.import_members(
-        ixp, [create_member_import_data(faker, date_now, asn.number)], date_now
+        ixp, [create_member_import_data(faker, asn.number)], date_now
     )
 
     members = imported.get_members()
@@ -59,8 +59,8 @@ def test_imports_multiple_members(faker: Faker):
     imported = app.import_members(
         ixp,
         [
-            create_member_import_data(faker, date_now, asn1.number),
-            create_member_import_data(faker, date_now, asn2.number),
+            create_member_import_data(faker, asn1.number),
+            create_member_import_data(faker, asn2.number),
         ],
         date_now,
     )
@@ -81,7 +81,7 @@ def test_adds_new_membership_for_existing_member_marked_as_left(faker):
         "end_date": datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
     }
     create_member(faker, es, ixp, asn, membership_properties)
-    member_import_data = create_member_import_data(faker, date_now, asn.number)
+    member_import_data = create_member_import_data(faker, asn.number)
 
     ixp = app.import_members(ixp, [member_import_data], date_now)
 
@@ -103,7 +103,6 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
     create_member(faker, es, ixp, asn, membership_properties)
     member_import_data = create_member_import_data(
         faker,
-        date_now,
         asn.number,
         created_date=datetime(year=2018, month=6, day=18, tzinfo=timezone.utc),
     )
@@ -130,7 +129,7 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
 
     date_after_date_left = datetime(2023, 9, 24, tzinfo=timezone.utc)
     member_data_with_created_date_after_date_left = create_member_import_data(
-        faker, date_now, asn.number, created_date=date_after_date_left
+        faker, asn.number, created_date=date_after_date_left
     )
 
     ixp = app.import_members(
@@ -161,7 +160,7 @@ def test_do_not_add_new_membership_for_same_created_date(faker):
     # As we always create a new membership record if the most recent one has ended, for multiple ASN-IX combos this
     # could result in multiple new memberships being created
     member_import = create_member_import_data(
-        faker, date_now, asn.number, created_date=created_date
+        faker, asn.number, created_date=created_date
     )
 
     ixp = app.import_members(ixp, [member_import], date_now)
@@ -181,14 +180,13 @@ def build_app(
 
 
 def create_member_import_data(
-    faker, date_now, asn: int, created_date: datetime | None = None
+    faker, asn: int, created_date: datetime | None = None
 ) -> MemberImportData:
     return {
         "asn": asn,
         "created_date": created_date
         or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         "updated_date": faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        "last_active": date_now,
         "is_rs_peer": faker.boolean(),
         "port_speed": faker.random_number(digits=5),
     }
