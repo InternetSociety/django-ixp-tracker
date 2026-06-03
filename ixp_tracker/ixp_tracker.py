@@ -14,7 +14,7 @@ from ixp_tracker.event_store import (
     AggregateNotFound,
     ValueNotChanged,
 )
-from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap
+from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap, IXPMembers
 
 logger = logging.getLogger("ixp_tracker")
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
@@ -436,6 +436,33 @@ class IXPIdMapProjection(Projection):
             return IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
         except IXPIdMap.DoesNotExist:
             return None
+
+
+class IXPMemberProjection(Projection):
+    aggregate_types = [IXP.__name__]
+    events = [
+        IXPMemberJoined.__name__,
+        IXPMemberUpdated.__name__,
+        RsPeeringStatusChange.__name__,
+        IXPMemberActiveInPeeringDb.__name__,
+        IXPMemberLeft.__name__,
+    ]
+
+    def do_handle(self, event: StoredEvent):
+        ixp = self.es.get_aggregate(event.aggregate_id, IXP)
+        asn = int(event.data["asn"])
+        member = ixp.get_members(True)[asn]
+        IXPMembers.objects.update_or_create(
+            ixp_id=event.aggregate_id,
+            asn=asn,
+            defaults={
+                "date_joined": member.date_joined,
+                "date_left": member.date_left,
+                "is_rs_peer": member.is_rs_peer,
+                "port_speed": member.port_speed,
+            }
+        )
+
 
 
 class ASNList(Projection):
