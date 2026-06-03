@@ -1,6 +1,7 @@
-from ixp_tracker.event_store import Projection, Aggregate
-from ixp_tracker.ixp_tracker_aggregates import IXPCreated, ASNCreated, ASN, IXP
-from ixp_tracker.models import StoredEvent, ASNMap, IXPIdMap, IXP as LegacyIXP
+from ixp_tracker.event_store import Projection, Aggregate, T
+from ixp_tracker.ixp_tracker_aggregates import IXPCreated, ASNCreated, ASN, IXP, IXPMemberJoined, RsPeeringStatusChange, \
+    IXPMemberActiveInPeeringDb, IXPMemberLeft, PortSpeedUpdated
+from ixp_tracker.models import StoredEvent, ASNMap, IXPIdMap, IXP as LegacyIXP, IXPMembers
 
 
 class ASNList(Projection):
@@ -48,3 +49,31 @@ class IXPIdMapProjection(Projection):
             return IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
         except IXPIdMap.DoesNotExist:
             return None
+
+
+class IXPMemberProjection(Projection):
+    aggregate_types = [IXP.__name__]
+    events = [
+        IXPMemberActiveInPeeringDb.__name__,
+        IXPMemberJoined.__name__,
+        IXPMemberLeft.__name__,
+        PortSpeedUpdated.__name__,
+        RsPeeringStatusChange.__name__,
+    ]
+
+    def do_handle(self, event: StoredEvent, ixp: T):
+        if not isinstance(ixp, IXP):
+            return
+        asn = int(event.data["asn"])
+        member = ixp.get_members(True)[asn]
+        IXPMembers.objects.update_or_create(
+            ixp_id=event.aggregate_id,
+            asn=asn,
+            defaults={
+                "date_joined": member.date_joined,
+                "date_left": member.date_left,
+                "is_rs_peer": member.is_rs_peer,
+                "port_speed": member.port_speed,
+            }
+        )
+

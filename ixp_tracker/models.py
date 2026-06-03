@@ -295,3 +295,24 @@ class AggregateSnapshot(models.Model):
                 name="ixp_tracker_snapshot_aggregate_sequence",
             )
         ]
+
+
+class IXPMembers(models.Model):
+    ixp_id = models.UUIDField()
+    asn = models.IntegerField()
+    date_joined = models.DateTimeField()
+    date_left = models.DateTimeField(null=True)
+    is_rs_peer = models.BooleanField()
+    port_speed = models.IntegerField()
+
+    def __str__(self):
+        return f"IXP member {self.ixp_id}, ASN: {self.asn}"
+
+    class Meta:
+        verbose_name = "IXP members"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ixp_id", "asn"], name="ixp_tracker_ixp_members"
+            ),
+        ]

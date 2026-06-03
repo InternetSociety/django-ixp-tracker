@@ -28,6 +28,8 @@ from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
+    ASNList,
+    IXPMemberProjection,
 )
 from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 
@@ -172,6 +174,7 @@ def build_app(geo_lookup: ASNGeoLookup) -> IXPTracker | None:
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
+    es.add_listener(IXPMemberProjection())
     app = IXPTracker(es, geo_lookup)
     return app
 
