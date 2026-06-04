@@ -246,3 +246,24 @@ class ASNMap(models.Model):
             ),
             models.UniqueConstraint(fields=["asn"], name="ixp_tracker_asn_map_asn"),
         ]
+
+
+class AggregateSnapshot(models.Model):
+    aggregate_id = models.UUIDField()
+    event_sequence = models.IntegerField()
+    snapshot_date = models.DateTimeField(auto_now_add=True)
+    data = models.JSONField()
+
+    def __str__(self):
+        return f"Snapshot for {self.aggregate_id} ({self.event_sequence})"
+
+    class Meta:
+        verbose_name = "Aggregate snapshot"
+        ordering = ["-event_sequence"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id", "event_sequence"],
+                name="ixp_tracker_snapshot_aggregate_sequence",
+            )
+        ]

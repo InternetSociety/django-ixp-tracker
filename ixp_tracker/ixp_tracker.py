@@ -10,7 +10,7 @@ from ixp_tracker.event_store import (
     EventStore,
     Projection,
     Aggregate,
-    Event,
+    DomainEvent,
     AggregateNotFound,
     ValueNotChanged,
 )
@@ -21,7 +21,7 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 
 
 @dataclass
-class IXPCreated(Event):
+class IXPCreated(DomainEvent):
     name: str
     long_name: str
     city: str
@@ -39,7 +39,7 @@ class IXPCreated(Event):
 
 
 @dataclass
-class IXPUpdated(Event):
+class IXPUpdated(DomainEvent):
     name: str | ValueNotChanged = ValueNotChanged()
     long_name: str | ValueNotChanged = ValueNotChanged()
     city: str | ValueNotChanged = ValueNotChanged()
@@ -51,22 +51,22 @@ class IXPUpdated(Event):
 
 
 @dataclass
-class ManrsStatusChange(Event):
+class ManrsStatusChange(DomainEvent):
     manrs_participant: bool
 
 
 @dataclass
-class AnchorHostChange(Event):
+class AnchorHostChange(DomainEvent):
     anchor_host: bool
 
 
 @dataclass
-class PhysicalLocationChange(Event):
+class PhysicalLocationChange(DomainEvent):
     physical_locations: int
 
 
 @dataclass
-class IXPActiveInPeeringDb(Event):
+class IXPActiveInPeeringDb(DomainEvent):
     last_active: str
 
 
@@ -81,7 +81,7 @@ class IXPMemberDetails:
 
 
 @dataclass
-class IXPMemberJoined(Event):
+class IXPMemberJoined(DomainEvent):
     asn: int
     date_joined: str
     date_updated: str
@@ -91,7 +91,7 @@ class IXPMemberJoined(Event):
 
 
 @dataclass
-class IXPMemberUpdated(Event):
+class IXPMemberUpdated(DomainEvent):
     asn: int
     date_joined: str | ValueNotChanged = ValueNotChanged()
     date_left: str | ValueNotChanged = ValueNotChanged()
@@ -100,19 +100,19 @@ class IXPMemberUpdated(Event):
 
 
 @dataclass
-class IXPMemberActiveInPeeringDb(Event):
+class IXPMemberActiveInPeeringDb(DomainEvent):
     asn: int
     last_active: str
 
 
 @dataclass
-class RsPeeringStatusChange(Event):
+class RsPeeringStatusChange(DomainEvent):
     asn: int
     is_rs_peer: bool
 
 
 @dataclass
-class IXPMemberLeft(Event):
+class IXPMemberLeft(DomainEvent):
     asn: int
     date_left: str
 
@@ -256,7 +256,7 @@ class PeeringPolicy(Enum):
 
 
 @dataclass
-class ASNCreated(Event):
+class ASNCreated(DomainEvent):
     as_number: int
     name: str
     network_type: str
@@ -266,7 +266,7 @@ class ASNCreated(Event):
 
 
 @dataclass
-class ASNUpdated(Event):
+class ASNUpdated(DomainEvent):
     name: str | ValueNotChanged = ValueNotChanged()
     network_type: str | ValueNotChanged = ValueNotChanged()
     peering_policy: str | ValueNotChanged = ValueNotChanged()
@@ -275,7 +275,7 @@ class ASNUpdated(Event):
 
 # We don't think this should ever happen but record as a separate event if it does
 @dataclass
-class ASNPeeringDbIdChanged(Event):
+class ASNPeeringDbIdChanged(DomainEvent):
     peeringdb_id: int
 
 
@@ -427,7 +427,6 @@ class IXPTracker:
         active_status = True
         ixp = IXP(id=uuid4())
         event = IXPCreated(
-            ixp,
             name,
             long_name,
             city,
@@ -443,8 +442,7 @@ class IXPTracker:
             org_id,
             physical_locations,
         )
-        self.es.store(event)
-        ixp.created(event)
+        ixp = self.es.store(ixp, event)
         return ixp
 
     def _update_ixp(
@@ -481,31 +479,24 @@ class IXPTracker:
         if org_id != ixp.org_id:
             updates["org_id"] = org_id
         if len(updates.keys()) > 0:
-            event = IXPUpdated(ixp, **updates)
-            self.es.store(event)
-            ixp.updated(event)
+            event = IXPUpdated(**updates)
+            ixp = self.es.store(ixp, event)
         if ixp.manrs_participant != manrs_participant:
-            manrs_update = ManrsStatusChange(ixp, manrs_participant=manrs_participant)
-            self.es.store(manrs_update)
-            ixp.manrs_status_change(manrs_update)
+            manrs_update = ManrsStatusChange(manrs_participant=manrs_participant)
+            ixp = self.es.store(ixp, manrs_update)
         if ixp.anchor_host != anchor_host:
-            anchor_host_event = AnchorHostChange(ixp, anchor_host=anchor_host)
-            self.es.store(anchor_host_event)
-            ixp.anchor_host_change(anchor_host_event)
+            anchor_host_event = AnchorHostChange(anchor_host=anchor_host)
+            ixp = self.es.store(ixp, anchor_host_event)
         if (
             ixp.physical_locations != physical_locations
             and physical_locations is not None
         ):
             locations_event = PhysicalLocationChange(
-                ixp, physical_locations=physical_locations
+                physical_locations=physical_locations
             )
-            self.es.store(locations_event)
-            ixp.physical_location_change(locations_event)
-        active_event = IXPActiveInPeeringDb(
-            ixp, last_active=stringify_date(last_active)
-        )
-        self.es.store(active_event)
-        ixp.active_in_peering_db(active_event)
+            ixp = self.es.store(ixp, locations_event)
+        active_event = IXPActiveInPeeringDb(last_active=stringify_date(last_active))
+        ixp = self.es.store(ixp, active_event)
         return ixp
 
     def import_asn(
@@ -529,19 +520,14 @@ class IXPTracker:
             if country_code != entity.country_code:
                 updates["country_code"] = country_code
             if len(updates.keys()) > 0:
-                update_event = ASNUpdated(entity, **updates)
-                self.es.store(update_event)
-                entity.updated(update_event)
+                update_event = ASNUpdated(**updates)
+                entity = self.es.store(entity, update_event)
             if peeringdb_id != entity.peeringdb_id:
-                peering_id_event = ASNPeeringDbIdChanged(
-                    entity, peeringdb_id=peeringdb_id
-                )
-                self.es.store(peering_id_event)
-                entity.peering_db_id_changed(peering_id_event)
+                peering_id_event = ASNPeeringDbIdChanged(peeringdb_id=peeringdb_id)
+                entity = self.es.store(entity, peering_id_event)
         else:
             entity = ASN(id=uuid4())
             event = ASNCreated(
-                entity,
                 as_number,
                 name,
                 network_type.value,
@@ -549,8 +535,7 @@ class IXPTracker:
                 peeringdb_id,
                 country_code,
             )
-            self.es.store(event)
-            entity.created(event)
+            entity = self.es.store(entity, event)
         return entity
 
     def import_members(
@@ -573,7 +558,6 @@ class IXPTracker:
             )
             if existing_member is None or member_has_rejoined:
                 join_event = IXPMemberJoined(
-                    ixp,
                     member["asn"],
                     stringify_date(member["created_date"]),
                     stringify_date(member["updated_date"]),
@@ -581,8 +565,7 @@ class IXPTracker:
                     member["is_rs_peer"],
                     member["port_speed"],
                 )
-                self.es.store(join_event)
-                ixp.member_joined(join_event)
+                ixp = self.es.store(ixp, join_event)
             else:
                 updates: dict[str, Any] = {}
                 # If we already have an inactive member, but it's end_date is after the start_date we're importing,
@@ -599,31 +582,25 @@ class IXPTracker:
                 if member["port_speed"] != existing_member.port_speed:
                     updates["port_speed"] = member["port_speed"]
                 if len(updates.keys()) > 0:
-                    update_event = IXPMemberUpdated(ixp, member["asn"], **updates)
-                    self.es.store(update_event)
-                    ixp.member_updated(update_event)
+                    update_event = IXPMemberUpdated(member["asn"], **updates)
+                    ixp = self.es.store(ixp, update_event)
                 if member["is_rs_peer"] != existing_member.is_rs_peer:
                     rs_peer_event = RsPeeringStatusChange(
-                        ixp, member["asn"], member["is_rs_peer"]
+                        member["asn"], member["is_rs_peer"]
                     )
-                    self.es.store(rs_peer_event)
-                    ixp.rs_peering_status_change(rs_peer_event)
+                    ixp = self.es.store(ixp, rs_peer_event)
                 active_event = IXPMemberActiveInPeeringDb(
-                    ixp, member["asn"], stringify_date(processing_date)
+                    member["asn"], stringify_date(processing_date)
                 )
-                self.es.store(active_event)
-                ixp.member_active_in_peering_db(active_event)
+                ixp = self.es.store(ixp, active_event)
 
         members = ixp.get_members()
         members_left = check_if_members_have_left(
             members, processing_date, self.geo_lookup
         )
         for member_left in members_left:
-            left_event = IXPMemberLeft(
-                ixp, member_left[0], stringify_date(member_left[1])
-            )
-            self.es.store(left_event)
-            ixp.member_left(left_event)
+            left_event = IXPMemberLeft(member_left[0], stringify_date(member_left[1]))
+            ixp = self.es.store(ixp, left_event)
         return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:

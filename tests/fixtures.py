@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypedDict, Optional, Any
@@ -9,7 +10,7 @@ from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import (
-    Event,
+    DomainEvent,
     ValueNotChanged,
     Aggregate,
     Projection,
@@ -342,12 +343,12 @@ class IXPIdMapFactory(factory.django.DjangoModelFactory):
 
 
 @dataclass
-class CreatedTestAggregate(Event):
+class CreatedTestAggregate(DomainEvent):
     foo: str
 
 
 @dataclass
-class TestAggregateUpdated(Event):
+class TestAggregateUpdated(DomainEvent):
     __test__ = False
     foo: Optional[str] | ValueNotChanged = ValueNotChanged()
     bar: str | ValueNotChanged = ValueNotChanged()
@@ -391,29 +392,44 @@ class TestProjection(Projection):
 
 
 class MemoryEventStore(EventStorePersistence):
-    events: list[StoredEvent] = []
-    sequence = 0
-
     def __init__(self):
-        self.events = []
+        self.events: list[StoredEvent] = []
+        self.sequence: dict[UUID, int] = {}
+        self.snapshots: dict[UUID, tuple[str, int]] = {}
+        self.snapshots_read: list[UUID] = []
 
-    def get_event_sequence(self, event: Event) -> int:
-        self.sequence = self.sequence + 1
-        return self.sequence
+    def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
+        if self.sequence.get(aggregate_id) is None:
+            self.sequence[aggregate_id] = 0
+        self.sequence[aggregate_id] = self.sequence[aggregate_id] + 1
+        return self.sequence[aggregate_id]
 
     def save_event(self, event: StoredEvent):
         self.events.append(event)
 
     def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[T]
+        self, aggregate_id: UUID, aggregate_type: type[T], sequence: int | None
     ) -> list[StoredEvent]:
-        return [e for e in self.events if e.aggregate_id == aggregate_id]
+        events = [e for e in self.events if e.aggregate_id == aggregate_id]
+        if sequence is None:
+            return events
+        return [e for e in events if e.event_sequence > sequence]
 
     def get_all(self, aggregate_type: type[T]) -> list[UUID]:
         return []
 
     def get_events(self) -> list[StoredEvent]:
         return self.events
+
+    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
+        self.snapshots[aggregate_id] = (json.dumps(data), sequence)
+
+    def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:
+        snapshot = self.snapshots.get(aggregate_id, None)
+        if snapshot is None:
+            return None, None
+        self.snapshots_read.append(aggregate_id)
+        return json.loads(snapshot[0]), snapshot[1]
 
 
 def build_app() -> IXPTracker:
@@ -431,7 +447,6 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
     peeringdb_id = faker.random_number(digits=3)
     ixp = IXP(id=uuid4())
     event = IXPCreated(
-        ixp,
         name,
         long_name,
         city,
@@ -447,8 +462,7 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
         faker.random_number(digits=3),
         faker.random_number(digits=2),
     )
-    es.store(event)
-    return es.get_aggregate(ixp.id, IXP)
+    return es.store(ixp, event)
 
 
 def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) -> ASN:
@@ -460,7 +474,6 @@ def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) ->
     country_code = country_code or faker.country_code()
     asn = ASN(id=uuid4())
     event = ASNCreated(
-        asn,
         as_number,
         name,
         network_type.value,
@@ -468,8 +481,7 @@ def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) ->
         peeringdb_id,
         country_code,
     )
-    es.store(event)
-    return es.get_aggregate(asn.id, ASN)
+    return es.store(asn, event)
 
 
 def create_member(
@@ -487,7 +499,6 @@ def create_member(
         "port_speed": faker.random_number(digits=5),
     }
     event = IXPMemberJoined(
-        ixp,
         asn.number,
         stringify_date(properties["start_date"]),
         stringify_date(properties["updated_date"]),
@@ -495,14 +506,12 @@ def create_member(
         properties["is_rs_peer"],
         properties["port_speed"],
     )
-    es.store(event)
-    ixp.member_joined(event)
+    ixp = es.store(ixp, event)
     if overrides.get("end_date") is not None:
         left_event = IXPMemberLeft(
-            ixp, asn.number, stringify_date(overrides.get("end_date"))
+            asn.number, stringify_date(overrides.get("end_date"))
         )
-        es.store(left_event)
-        ixp.member_left(left_event)
+        ixp = es.store(ixp, left_event)
     return ixp
 
 

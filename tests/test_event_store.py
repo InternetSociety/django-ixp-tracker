@@ -9,10 +9,10 @@ from ixp_tracker.event_store import (
     EventHasNoUpdatedFields,
     AggregateNotFound,
     EventStore,
-    Event,
+    DomainEvent,
     EventNotMapped,
 )
-from ixp_tracker.models import CannotChangeStoredEvent
+from ixp_tracker.models import CannotChangeStoredEvent, StoredEvent
 from tests.fixtures import (
     TestAggregate,
     CreatedTestAggregate,
@@ -24,75 +24,87 @@ pytestmark = pytest.mark.django_db
 
 
 @dataclass
-class UnmappedEvent(Event):
+class UnmappedDomainEvent(DomainEvent):
     foo: str
 
 
 def test_saves_event():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
+    event = CreatedTestAggregate(foo="bar")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     assert stored_event.id == 1
 
 
 def test_saves_event_type():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
+    event = CreatedTestAggregate(foo="bar")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     assert stored_event.event_type == "CreatedTestAggregate"
 
 
 def test_saves_aggregate_type():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
+    event = CreatedTestAggregate(foo="bar")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     assert stored_event.aggregate_type == "TestAggregate"
 
 
 def test_saves_event_data():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
+    event = CreatedTestAggregate(foo="bar")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     assert stored_event.data == {"foo": "bar"}
 
 
 def test_saves_aggregate_sequence():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
-    _ = es.store(event)
-    event = TestAggregateUpdated(aggregate=aggregate, foo="baz")
+    event = CreatedTestAggregate(foo="bar")
+    _ = es.store(aggregate, event)
+    event = TestAggregateUpdated(foo="baz")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     assert stored_event.event_sequence == 2
 
 
 def test_saved_events_cannot_be_changed():
-    es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
+    event = CreatedTestAggregate(foo="bar")
 
-    stored_event = es.store(event)
+    es.store(aggregate, event)
 
+    stored_event = des.get_events().pop()
     with pytest.raises(CannotChangeStoredEvent):
         stored_event.event_type = "FooBar"
         stored_event.save()
@@ -102,10 +114,10 @@ def test_hydrates_aggregate():
     es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
-    es.store(event)
-    event = TestAggregateUpdated(aggregate=aggregate, foo="baz")
-    es.store(event)
+    event = CreatedTestAggregate(foo="bar")
+    es.store(aggregate, event)
+    event = TestAggregateUpdated(foo="baz")
+    es.store(aggregate, event)
 
     saved_aggregate = es.get_aggregate(aggregate.id, TestAggregate)
 
@@ -116,10 +128,10 @@ def test_sets_property_to_none():
     es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
-    es.store(event)
-    event = TestAggregateUpdated(aggregate=aggregate, foo=None)
-    es.store(event)
+    event = CreatedTestAggregate(foo="bar")
+    es.store(aggregate, event)
+    event = TestAggregateUpdated(foo=None)
+    es.store(aggregate, event)
 
     saved_aggregate = es.get_aggregate(aggregate.id, TestAggregate)
 
@@ -130,10 +142,10 @@ def test_ignores_properties_not_set_in_event():
     es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
-    es.store(event)
-    event = TestAggregateUpdated(aggregate=aggregate, bar="baz")
-    es.store(event)
+    event = CreatedTestAggregate(foo="bar")
+    es.store(aggregate, event)
+    event = TestAggregateUpdated(bar="baz")
+    es.store(aggregate, event)
 
     saved_aggregate = es.get_aggregate(aggregate.id, TestAggregate)
 
@@ -144,11 +156,11 @@ def test_rejects_event_with_no_changes():
     es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
 
     aggregate = TestAggregate(id=uuid4())
-    event = CreatedTestAggregate(aggregate=aggregate, foo="bar")
-    es.store(event)
-    event = TestAggregateUpdated(aggregate=aggregate)
+    event = CreatedTestAggregate(foo="bar")
+    es.store(aggregate, event)
+    event = TestAggregateUpdated()
     with pytest.raises(EventHasNoUpdatedFields):
-        es.store(event)
+        es.store(aggregate, event)
 
 
 def test_raises_if_aggregate_not_found():
@@ -163,8 +175,14 @@ def test_raises_if_event_not_mapped():
     es = EventStore(TEST_EVENT_MAP, DjangoEventStore())
     aggregate = TestAggregate(id=uuid4())
 
-    event = UnmappedEvent(aggregate=aggregate, foo="bar")
-    es.store(event)
+    event = StoredEvent(
+        aggregate_id=aggregate.id,
+        aggregate_type="TestAggregate",
+        event_type="UnmappedEvent",
+        event_sequence=1,
+        data={},
+    )
+    event.save()
 
     with pytest.raises(EventNotMapped):
         es.get_aggregate(aggregate.id, TestAggregate)

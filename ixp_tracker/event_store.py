@@ -6,7 +6,7 @@ from typing import TypeVar
 from uuid import UUID
 
 # At some point we might want to change the ES persistence to depend on a neutral DTO rather than this Django model
-from ixp_tracker.models import StoredEvent
+from ixp_tracker.models import StoredEvent, AggregateSnapshot
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -14,16 +14,32 @@ convert_event_type_to_method_name = re.compile(r"(?<!^)(?=[A-Z])")
 
 
 @dataclass
-class Aggregate(ABC):
-    id: UUID
-
-
-T = TypeVar("T", bound=Aggregate)
+class DomainEvent(ABC):
+    pass
 
 
 @dataclass
-class Event(ABC):
-    aggregate: Aggregate
+class Aggregate(ABC):
+    id: UUID
+    sequence: int = 0
+
+    def hydrate(self, data: dict):
+        for key in data.keys():
+            setattr(self, key, data[key])
+
+    def snapshot(self):
+        values = dict(self.__dict__)
+        del values["id"]
+        return values
+
+    def apply_event(self, event: DomainEvent, sequence: int):
+        method_name = type(event).__name__.replace(type(self).__name__, "")
+        method_name = convert_event_type_to_method_name.sub("_", method_name).lower()
+        self.sequence = sequence
+        getattr(self, method_name)(event)
+
+
+T = TypeVar("T", bound=Aggregate)
 
 
 class ValueNotChanged:
@@ -39,6 +55,10 @@ class AggregateNotFound(Exception):
 
 
 class EventNotMapped(Exception):
+    pass
+
+
+class EventOrderInvalid(Exception):
     pass
 
 
@@ -62,7 +82,7 @@ class Projection(ABC):
 
 class EventStorePersistence(ABC):
     @abstractmethod
-    def get_event_sequence(self, event: Event) -> int:
+    def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
         pass
 
     @abstractmethod
@@ -71,7 +91,7 @@ class EventStorePersistence(ABC):
 
     @abstractmethod
     def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[T]
+        self, aggregate_id: UUID, aggregate_type: type[T], sequence: int | None
     ) -> list[StoredEvent]:
         pass
 
@@ -83,10 +103,18 @@ class EventStorePersistence(ABC):
     def get_events(self) -> list[StoredEvent]:
         pass
 
+    @abstractmethod
+    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
+        pass
+
+    @abstractmethod
+    def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:
+        pass
+
 
 class EventStore:
     listeners: list[Projection]
-    event_map: dict[str, type[Event]]
+    event_map: dict[str, type[DomainEvent]]
     db: EventStorePersistence
 
     def __init__(self, event_map, db: EventStorePersistence):
@@ -94,8 +122,8 @@ class EventStore:
         self.event_map = event_map
         self.db = db
 
-    def store(self, event: Event) -> StoredEvent:
-        event_sequence = self.db.get_event_sequence(event)
+    def store(self, aggregate: T, event: DomainEvent) -> T:
+        event_sequence = self.db.get_event_sequence(event, aggregate.id)
         event_data = asdict(event)
         event_data = {
             key: value
@@ -106,8 +134,8 @@ class EventStore:
             raise EventHasNoUpdatedFields
 
         stored_event = StoredEvent(
-            aggregate_id=event.aggregate.id,
-            aggregate_type=type(event.aggregate).__name__,
+            aggregate_id=aggregate.id,
+            aggregate_type=type(aggregate).__name__,
             event_type=type(event).__name__,
             event_sequence=event_sequence,
             data=event_data,
@@ -116,24 +144,28 @@ class EventStore:
         for listener in self.listeners:
             listener.handle(stored_event)
 
-        return stored_event
+        aggregate.apply_event(event, stored_event.event_sequence)
+        return aggregate
 
     def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:
-        events = self.db.get_aggregate_events(aggregate_id, aggregate_type)
-        if len(events) == 0:
-            raise AggregateNotFound
-
+        data, sequence = self.db.load_snapshot(aggregate_id)
         aggregate = aggregate_type(aggregate_id)
+        if data:
+            aggregate.hydrate(data)
+        events = self.db.get_aggregate_events(aggregate_id, aggregate_type, sequence)
+        if sequence is None and len(events) == 0:
+            raise AggregateNotFound
         for event in events:
-            method_name = event.event_type.replace(aggregate_type.__name__, "")
-            method_name = convert_event_type_to_method_name.sub(
-                "_", method_name
-            ).lower()
+            if event.event_sequence != (aggregate.sequence + 1):
+                raise EventOrderInvalid(
+                    f"Domain event out of order, aggregate {aggregate.sequence}, event:{event.event_sequence}"
+                )
             event_class = self.event_map.get(event.event_type, None)
             if not event_class:
                 raise EventNotMapped("Domain event not registered")
-            getattr(aggregate, method_name)(
-                event_class(aggregate=aggregate, **event.data)
+            aggregate.apply_event(
+                event_class(**event.data),
+                event.event_sequence,
             )
         return aggregate
 
@@ -147,11 +179,22 @@ class EventStore:
     def add_listener(self, projection: Projection):
         self.listeners.append(projection)
 
+    def save_snapshot(self, aggregate: T):
+        self.db.save_snapshot(aggregate.id, aggregate.snapshot(), aggregate.sequence)
+
+    def load_snapshot(self, aggregate_id: UUID, aggregate_type: type[T]) -> T | None:
+        data, _ = self.db.load_snapshot(aggregate_id)
+        if data is None:
+            return None
+        aggregate = aggregate_type(aggregate_id)
+        aggregate.hydrate(data)
+        return aggregate
+
 
 class DjangoEventStore(EventStorePersistence):
-    def get_event_sequence(self, event: Event) -> int:
+    def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
         previous_event = (
-            StoredEvent.objects.filter(aggregate_id=event.aggregate.id)
+            StoredEvent.objects.filter(aggregate_id=aggregate_id)
             .order_by("-event_sequence")
             .first()
         )
@@ -160,12 +203,23 @@ class DjangoEventStore(EventStorePersistence):
     def save_event(self, event: StoredEvent):
         event.save()
 
-    def get_aggregate_events(self, aggregate_id: UUID, aggregate_type: type[T]):
-        return (
-            StoredEvent.objects.filter(aggregate_id=aggregate_id)
-            .order_by("event_sequence")
-            .all()
-        )
+    def get_aggregate_events(
+        self, aggregate_id: UUID, aggregate_type: type[T], sequence: int | None
+    ):
+        if sequence is None:
+            return (
+                StoredEvent.objects.filter(aggregate_id=aggregate_id)
+                .order_by("event_sequence")
+                .all()
+            )
+        else:
+            return (
+                StoredEvent.objects.filter(
+                    aggregate_id=aggregate_id, event_sequence__gt=sequence
+                )
+                .order_by("event_sequence")
+                .all()
+            )
 
     def get_all(self, aggregate_type: type[T]) -> list[UUID]:
         return list(
@@ -176,3 +230,15 @@ class DjangoEventStore(EventStorePersistence):
 
     def get_events(self) -> list[StoredEvent]:
         return list(StoredEvent.objects.all())
+
+    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
+        AggregateSnapshot.objects.update_or_create(
+            aggregate_id=aggregate_id, event_sequence=sequence, defaults={"data": data}
+        )
+
+    def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:
+        snapshot = AggregateSnapshot.objects.filter(aggregate_id=aggregate_id).first()
+        if snapshot is None:
+            return None, None
+        else:
+            return snapshot.data, snapshot.event_sequence
