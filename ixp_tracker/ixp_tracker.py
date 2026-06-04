@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from enum import Enum
@@ -15,6 +16,7 @@ from ixp_tracker.event_store import (
 )
 from ixp_tracker.models import StoredEvent, IXPIdMap, IXP as LegacyIXP, ASNMap
 
+logger = logging.getLogger("ixp_tracker")
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 
 
@@ -561,6 +563,7 @@ class IXPTracker:
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
             if as_entity is None:
+                logger.warning("Cannot find AS", extra={"asn": member["asn"]})
                 continue
             existing_member = existing_members.get(member["asn"])
             member_has_rejoined = (

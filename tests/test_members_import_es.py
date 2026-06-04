@@ -24,19 +24,26 @@ pytestmark = pytest.mark.django_db
 date_now = datetime.now(timezone.utc)
 
 
-def test_adds_new_member(faker):
+def test_adds_new_members(faker):
     app, es = build_app()
     ixp = create_ixp(faker, es)
-    asn = create_asn(faker, es)
-    member_import = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
+    asn_one = create_asn(faker, es)
+    asn_two = create_asn(faker, es)
+    member_import_one = PeeringNetIXLANFactory(
+        asn=asn_one.number, ix_id=ixp.peeringdb_id
+    )
+    member_import_two = PeeringNetIXLANFactory(
+        asn=asn_two.number, ix_id=ixp.peeringdb_id
+    )
 
     processor = importers.process_member_data(date_now, TestLookup(), app)
-    processor([member_import])
+    processor([member_import_one, member_import_two])
 
     ixp = es.get_aggregate(ixp.id, IXP)
     members = ixp.get_members()
-    assert len(members) == 1
-    assert asn.number in members.keys()
+    assert len(members) == 2
+    assert asn_one.number in members.keys()
+    assert asn_two.number in members.keys()
 
 
 def test_does_nothing_if_no_asn_found(faker):

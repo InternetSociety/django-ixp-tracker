@@ -27,6 +27,7 @@ from ixp_tracker.ixp_tracker import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
+    ASNList,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -165,9 +166,9 @@ def import_ixps(
 def build_app(geo_lookup: ASNGeoLookup) -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
         return None
-    id_maps = IXPIdMapProjection()
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
-    es.add_listener(id_maps)
+    es.add_listener(IXPIdMapProjection())
+    es.add_listener(ASNList())
     app = IXPTracker(es, geo_lookup)
     return app
 
@@ -375,13 +376,15 @@ def process_member_data(
                 logger.debug("Importing IXP members", extra=log_data)
                 ixp_entity = event_sourcing_app.find_by_peeringdb_id(ixp)
                 if ixp_entity is None:
+                    logger.warning("Cannot find IXP", extra=log_data)
                     continue
-                import_members = event_sourcing_app.import_members(
+                ixp_entity = event_sourcing_app.import_members(
                     ixp_entity, ixp_data[ixp], processing_date
                 )
-                if import_members is None:
+                if ixp_entity is None:
                     logger.warning("Cannot import IXP members", extra=log_data)
                 else:
+                    log_data["member_count"] = len(ixp_entity.get_members(True))
                     logger.debug("Imported IXP members", extra=log_data)
         else:
             for member_data in all_member_data:
