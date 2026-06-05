@@ -230,6 +230,57 @@ class IXP(Aggregate):
             event.date_left, DATE_FORMAT
         )
 
+    def snapshot(self):
+        values = super().snapshot()
+        values["date_created"] = stringify_date(values["date_created"])
+        values["last_updated"] = stringify_date(values["last_updated"])
+        values["last_active"] = stringify_date(values["last_active"])
+        values["members"] = dict(values["members"])
+        for member_asn in values["members"].keys():
+            values["members"][member_asn] = dict(values["members"][member_asn].__dict__)
+            values["members"][member_asn]["date_joined"] = stringify_date(
+                values["members"][member_asn]["date_joined"]
+            )
+            values["members"][member_asn]["date_updated"] = stringify_date(
+                values["members"][member_asn]["date_updated"]
+            )
+            values["members"][member_asn]["last_active"] = stringify_date(
+                values["members"][member_asn]["last_active"]
+            )
+            if values["members"][member_asn]["date_left"]:
+                values["members"][member_asn]["date_left"] = stringify_date(
+                    values["members"][member_asn]["date_left"]
+                )
+        return values
+
+    def hydrate(self, data: dict):
+        super().hydrate(data)
+        self.date_created = datetime.strptime(data["date_created"], DATE_FORMAT)
+        self.last_updated = datetime.strptime(data["last_updated"], DATE_FORMAT)
+        self.last_active = datetime.strptime(data["last_active"], DATE_FORMAT)
+        members = {}
+        for member_asn in self.members.keys():
+            member_details = self.members[member_asn]
+            member_details["date_joined"] = datetime.strptime(  # type: ignore
+                self.members[member_asn]["date_joined"],  # type: ignore
+                DATE_FORMAT,
+            )
+            member_details["date_updated"] = datetime.strptime(  # type: ignore
+                self.members[member_asn]["date_updated"],  # type: ignore
+                DATE_FORMAT,
+            )
+            member_details["last_active"] = datetime.strptime(  # type: ignore
+                self.members[member_asn]["last_active"],  # type: ignore
+                DATE_FORMAT,
+            )
+            if member_details["date_left"]:  # type: ignore
+                member_details["date_left"] = datetime.strptime(  # type: ignore
+                    self.members[member_asn]["date_left"],  # type: ignore
+                    DATE_FORMAT,
+                )
+            members[int(member_asn)] = IXPMemberDetails(**member_details)  # type: ignore
+        self.members = members
+
 
 class NetworkType(Enum):
     NSP = "NSP"
@@ -384,9 +435,6 @@ class MemberImportData(TypedDict):
 
 
 class IXPTracker:
-    es: EventStore
-    geo_lookup: ASNGeoLookup
-
     def __init__(self, es: EventStore, geo_lookup: ASNGeoLookup):
         self.es = es
         self.geo_lookup = geo_lookup
@@ -601,6 +649,7 @@ class IXPTracker:
         for member_left in members_left:
             left_event = IXPMemberLeft(member_left[0], stringify_date(member_left[1]))
             ixp = self.es.store(ixp, left_event)
+        self.es.save_snapshot(ixp)
         return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
