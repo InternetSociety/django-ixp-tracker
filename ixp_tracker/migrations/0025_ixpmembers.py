@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ixp_tracker', '0023_asnmap'),
+        ('ixp_tracker', '0024_aggregatesnapshot'),
     ]
 
     operations = [
