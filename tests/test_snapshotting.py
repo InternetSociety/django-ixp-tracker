@@ -24,6 +24,22 @@ def test_saves_snapshot():
     assert snapshot.foo == "bar"
 
 
+def test_respects_time_travel_when_saving_snapshot(faker):
+    mes = MemoryEventStore()
+    es = EventStore(TEST_EVENT_MAP, mes)
+    time_in_past = faker.date_time_between(
+        start_date="-1w", end_date="-1d", tzinfo=timezone.utc
+    )
+    es.time_travel(time_in_past)
+
+    aggregate = TestAggregate(id=uuid4())
+    aggregate.created(CreatedTestAggregate(foo="bar"))
+    es.save_snapshot(aggregate)
+
+    snapshot = mes.snapshots[aggregate.id]
+    assert snapshot[2] == time_in_past
+
+
 def test_saves_datetime_to_snapshot():
     @dataclass
     class AddedDatetime(DomainEvent):

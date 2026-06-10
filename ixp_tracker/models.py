@@ -251,7 +251,7 @@ class ASNMap(models.Model):
 class AggregateSnapshot(models.Model):
     aggregate_id = models.UUIDField()
     event_sequence = models.IntegerField()
-    snapshot_date = models.DateTimeField(auto_now_add=True)
+    snapshot_date = models.DateTimeField()
     data = models.JSONField()
 
     def __str__(self):
