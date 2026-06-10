@@ -711,6 +711,9 @@ class IXPTracker:
         except ASNMap.DoesNotExist:
             return None
 
+    def time_travel(self, date_in_past: datetime):
+        self.es.time_travel(date_in_past)
+
 
 def stringify_date(date_value: datetime) -> str:
     if date_value.tzinfo is None:

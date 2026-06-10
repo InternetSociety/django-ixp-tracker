@@ -2,6 +2,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from typing import TypeVar
 from uuid import UUID
 
@@ -113,14 +114,14 @@ class EventStorePersistence(ABC):
 
 
 class EventStore:
-    listeners: list[Projection]
-    event_map: dict[str, type[DomainEvent]]
-    db: EventStorePersistence
-
     def __init__(self, event_map, db: EventStorePersistence):
-        self.listeners = []
-        self.event_map = event_map
-        self.db = db
+        self.listeners: list[Projection] = []
+        self.event_map: dict[str, type[DomainEvent]] = event_map
+        self.db: EventStorePersistence = db
+        self.date_now: datetime | None = None
+
+    def time_travel(self, date_in_past: datetime):
+        self.date_now = date_in_past
 
     def store(self, aggregate: T, event: DomainEvent) -> T:
         event_sequence = self.db.get_event_sequence(event, aggregate.id)
@@ -136,6 +137,7 @@ class EventStore:
         stored_event = StoredEvent(
             aggregate_id=aggregate.id,
             aggregate_type=type(aggregate).__name__,
+            event_date=self.date_now or datetime.now(timezone.utc),
             event_type=type(event).__name__,
             event_sequence=event_sequence,
             data=event_data,

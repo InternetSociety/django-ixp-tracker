@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timezone, datetime
 
 import pytest
 
@@ -179,6 +180,7 @@ def test_raises_if_event_not_mapped():
         aggregate_id=aggregate.id,
         aggregate_type="TestAggregate",
         event_type="UnmappedEvent",
+        event_date=datetime.now(timezone.utc),
         event_sequence=1,
         data={},
     )
@@ -186,3 +188,20 @@ def test_raises_if_event_not_mapped():
 
     with pytest.raises(EventNotMapped):
         es.get_aggregate(aggregate.id, TestAggregate)
+
+
+def test_time_machine_saves_event_in_the_past(faker):
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
+    time_in_past = faker.date_time_between(
+        start_date="-1w", end_date="-1d", tzinfo=timezone.utc
+    )
+    es.time_travel(time_in_past)
+
+    aggregate = TestAggregate(id=uuid4())
+    event = CreatedTestAggregate(foo="bar")
+
+    es.store(aggregate, event)
+
+    stored_event = des.get_events().pop()
+    assert stored_event.event_date == time_in_past

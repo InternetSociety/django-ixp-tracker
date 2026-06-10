@@ -186,7 +186,7 @@ class CannotChangeStoredEvent(Exception):
 class StoredEvent(models.Model):
     aggregate_id = models.UUIDField()
     aggregate_type = models.TextField(blank=False)
-    event_date = models.DateTimeField(auto_now_add=True)
+    event_date = models.DateTimeField()
     event_type = models.TextField(blank=False)
     event_sequence = models.IntegerField()
     data = models.JSONField()
