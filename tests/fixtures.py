@@ -397,7 +397,7 @@ class MemoryEventStore(EventStorePersistence):
     def __init__(self):
         self.events: list[StoredEvent] = []
         self.sequence: dict[UUID, int] = {}
-        self.snapshots: dict[UUID, tuple[str, int]] = {}
+        self.snapshots: dict[UUID, tuple[str, int, datetime]] = {}
         self.snapshots_read: list[UUID] = []
 
     def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
@@ -423,8 +423,10 @@ class MemoryEventStore(EventStorePersistence):
     def get_events(self) -> list[StoredEvent]:
         return self.events
 
-    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
-        self.snapshots[aggregate_id] = (json.dumps(data), sequence)
+    def save_snapshot(
+        self, aggregate_id: UUID, data: dict, sequence: int, date_now: datetime
+    ):
+        self.snapshots[aggregate_id] = (json.dumps(data), sequence, date_now)
 
     def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:
         snapshot = self.snapshots.get(aggregate_id, None)

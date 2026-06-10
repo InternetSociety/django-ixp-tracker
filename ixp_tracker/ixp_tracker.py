@@ -269,6 +269,9 @@ class IXPTracker:
         except ASNMap.DoesNotExist:
             return None
 
+    def time_travel(self, date_in_past: datetime):
+        self.es.time_travel(date_in_past)
+
 
 def check_if_members_have_left(
     members: dict[int, ixpt.IXPMemberDetails],

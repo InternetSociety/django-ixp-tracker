@@ -2,6 +2,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from typing import TypeVar
 from uuid import UUID
 
@@ -104,7 +105,9 @@ class EventStorePersistence(ABC):
         pass
 
     @abstractmethod
-    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
+    def save_snapshot(
+        self, aggregate_id: UUID, data: dict, sequence: int, date_now: datetime
+    ):
         pass
 
     @abstractmethod
@@ -113,14 +116,14 @@ class EventStorePersistence(ABC):
 
 
 class EventStore:
-    listeners: list[Projection]
-    event_map: dict[str, type[DomainEvent]]
-    db: EventStorePersistence
-
     def __init__(self, event_map, db: EventStorePersistence):
-        self.listeners = []
-        self.event_map = event_map
-        self.db = db
+        self.listeners: list[Projection] = []
+        self.event_map: dict[str, type[DomainEvent]] = event_map
+        self.db: EventStorePersistence = db
+        self.date_now: datetime | None = None
+
+    def time_travel(self, date_in_past: datetime):
+        self.date_now = date_in_past
 
     def store(self, aggregate: T, event: DomainEvent) -> T:
         event_sequence = self.db.get_event_sequence(event, aggregate.id)
@@ -136,6 +139,7 @@ class EventStore:
         stored_event = StoredEvent(
             aggregate_id=aggregate.id,
             aggregate_type=type(aggregate).__name__,
+            event_date=self.date_now or datetime.now(timezone.utc),
             event_type=type(event).__name__,
             event_sequence=event_sequence,
             data=event_data,
@@ -180,7 +184,12 @@ class EventStore:
         self.listeners.append(projection)
 
     def save_snapshot(self, aggregate: T):
-        self.db.save_snapshot(aggregate.id, aggregate.snapshot(), aggregate.sequence)
+        self.db.save_snapshot(
+            aggregate.id,
+            aggregate.snapshot(),
+            aggregate.sequence,
+            self.date_now or datetime.now(timezone.utc),
+        )
 
     def load_snapshot(self, aggregate_id: UUID, aggregate_type: type[T]) -> T | None:
         data, _ = self.db.load_snapshot(aggregate_id)
@@ -231,9 +240,13 @@ class DjangoEventStore(EventStorePersistence):
     def get_events(self) -> list[StoredEvent]:
         return list(StoredEvent.objects.all())
 
-    def save_snapshot(self, aggregate_id: UUID, data: dict, sequence: int):
+    def save_snapshot(
+        self, aggregate_id: UUID, data: dict, sequence: int, date_now: datetime
+    ):
         AggregateSnapshot.objects.update_or_create(
-            aggregate_id=aggregate_id, event_sequence=sequence, defaults={"data": data}
+            aggregate_id=aggregate_id,
+            event_sequence=sequence,
+            defaults={"data": data, "snapshot_date": date_now},
         )
 
     def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:

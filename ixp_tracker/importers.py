@@ -54,6 +54,8 @@ def import_data(
         logger.debug("Toggled IXPs active status")
     else:
         processing_date = processing_date.replace(day=1)
+        if es_app:
+            es_app.time_travel(processing_date)
         processing_month = processing_date.month
         found = False
         backfill_raw = None
