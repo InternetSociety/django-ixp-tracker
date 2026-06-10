@@ -4,26 +4,37 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0024_aggregatesnapshot'),
+        ("ixp_tracker", "0024_aggregatesnapshot"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='IXPMembers',
+            name="IXPMembers",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('ixp_id', models.UUIDField()),
-                ('asn', models.IntegerField()),
-                ('date_joined', models.DateTimeField()),
-                ('date_left', models.DateTimeField(null=True)),
-                ('is_rs_peer', models.BooleanField()),
-                ('port_speed', models.IntegerField()),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("ixp_id", models.UUIDField()),
+                ("asn", models.IntegerField()),
+                ("date_joined", models.DateTimeField()),
+                ("date_left", models.DateTimeField(null=True)),
+                ("is_rs_peer", models.BooleanField()),
+                ("port_speed", models.IntegerField()),
             ],
             options={
-                'verbose_name': 'IXP members',
-                'constraints': [models.UniqueConstraint(fields=('ixp_id', 'asn'), name='ixp_tracker_ixp_members')],
+                "verbose_name": "IXP members",
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("ixp_id", "asn"), name="ixp_tracker_ixp_members"
+                    )
+                ],
             },
         ),
     ]

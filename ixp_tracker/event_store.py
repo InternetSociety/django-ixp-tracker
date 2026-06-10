@@ -2,7 +2,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from typing import TypeVar, Protocol
+from typing import TypeVar
 from uuid import UUID
 
 # At some point we might want to change the ES persistence to depend on a neutral DTO rather than this Django model
@@ -62,22 +62,12 @@ class EventOrderInvalid(Exception):
     pass
 
 
-class AggregateLookup(Protocol):
-    def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:
-        pass
-
-
 class Projection(ABC):
-    es: AggregateLookup
-
     def __init__(self):
         if self.__getattribute__("aggregate_types") is None:
             self.aggregate_types = []
         if self.__getattribute__("events") is None:
             self.events = []
-
-    def connect(self, es: AggregateLookup):
-        self.es = es
 
     def handle(self, event: StoredEvent, aggregate: T):
         if event.aggregate_type not in self.aggregate_types:
@@ -122,15 +112,11 @@ class EventStorePersistence(ABC):
         pass
 
 
-class EventStore(AggregateLookup):
-    listeners: list[Projection]
-    event_map: dict[str, type[DomainEvent]]
-    db: EventStorePersistence
-
+class EventStore:
     def __init__(self, event_map, db: EventStorePersistence):
-        self.listeners = []
-        self.event_map = event_map
-        self.db = db
+        self.listeners: list[Projection] = []
+        self.event_map: dict[str, type[DomainEvent]] = event_map
+        self.db: EventStorePersistence = db
 
     def store(self, aggregate: T, event: DomainEvent) -> T:
         event_sequence = self.db.get_event_sequence(event, aggregate.id)
@@ -187,7 +173,6 @@ class EventStore(AggregateLookup):
         return aggregates
 
     def add_listener(self, projection: Projection):
-        projection.connect(self)
         self.listeners.append(projection)
 
     def save_snapshot(self, aggregate: T):
