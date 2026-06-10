@@ -33,6 +33,7 @@ from ixp_tracker.ixp_tracker import (
     stringify_date,
     IXPMemberJoined,
     IXPMemberLeft,
+    IXPBecameActive,
 )
 import ixp_tracker.models as legacy
 from ixp_tracker.models import (
@@ -440,7 +441,7 @@ def build_app() -> IXPTracker:
     return app
 
 
-def create_ixp(faker: Faker, es: EventStore) -> IXP:
+def create_ixp(faker: Faker, es: EventStore, active_status=False) -> IXP:
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
@@ -452,7 +453,7 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
         city,
         peeringdb_id,
         faker.url(schemes=["https"]),
-        True,
+        False,
         faker.country_code(),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
@@ -462,7 +463,10 @@ def create_ixp(faker: Faker, es: EventStore) -> IXP:
         faker.random_number(digits=3),
         faker.random_number(digits=2),
     )
-    return es.store(ixp, event)
+    ixp = es.store(ixp, event)
+    if active_status:
+        ixp = es.store(ixp, IXPBecameActive())
+    return ixp
 
 
 def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) -> ASN:

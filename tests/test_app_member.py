@@ -168,6 +168,52 @@ def test_do_not_add_new_membership_for_same_created_date(faker):
     assert len(ixp.get_members()) == 1
 
 
+def test_marks_ixp_active_if_has_three_members(
+    faker,
+):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es)
+    member_import_data = []
+    for _ in range(1, 4):
+        asn = create_asn(faker, es)
+        member_import_data.append(create_member_import_data(faker, asn.number))
+
+    assert ixp.active_status is False
+
+    ixp = app.import_members(ixp, member_import_data, date_now)
+
+    assert ixp.active_status is True
+
+
+def test_marks_ixp_inactive_if_members_drops_below_three(
+    faker,
+):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es, True)
+    member_import_data = []
+    # Create 3 existing members
+    for member_count in range(1, 4):
+        asn = create_asn(faker, es)
+        create_member(
+            faker,
+            es,
+            ixp,
+            asn,
+            {"last_active": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)},
+        )
+        if member_count < 3:
+            # But only 2 existing members in the new import
+            member_import_data.append(create_member_import_data(faker, asn.number))
+
+    assert ixp.active_status is True
+
+    ixp = app.import_members(ixp, member_import_data, date_now)
+
+    assert ixp.active_status is False
+
+
 def build_app(
     es_db: EventStorePersistence | None = None,
     geo_lookup: ASNGeoLookup | None = None,

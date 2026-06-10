@@ -346,7 +346,7 @@ def process_member_data(
     def do_process_member_data(all_member_data):
         all_member_data = dedupe_member_data(all_member_data)
         if event_sourcing_app:
-            ixp_data = {}
+            ixp_member_data = {}
             for member_data in all_member_data:
                 asn = int(member_data["asn"])
                 created_date = datetime.strptime(
@@ -366,31 +366,48 @@ def process_member_data(
                     "is_rs_peer": is_rs_peer,
                     "port_speed": port_speed,
                 }
-                seen = ixp_data.get(ix_id)
+                seen = ixp_member_data.get(ix_id)
                 if not seen:
-                    ixp_data[ix_id] = [import_data]
+                    ixp_member_data[ix_id] = [import_data]
                 else:
-                    ixp_data[ix_id] += [import_data]
-            for ixp in ixp_data:
-                log_data = {"ixp": ixp}
-                logger.debug("Importing IXP members", extra=log_data)
-                ixp_entity = event_sourcing_app.find_by_peeringdb_id(ixp)
-                if ixp_entity is None:
-                    logger.warning("Cannot find IXP", extra=log_data)
-                    continue
-                ixp_entity = event_sourcing_app.import_members(
-                    ixp_entity, ixp_data[ixp], processing_date
-                )
-                if ixp_entity is None:
-                    logger.warning("Cannot import IXP members", extra=log_data)
-                else:
-                    log_data["member_count"] = len(ixp_entity.get_members(True))
+                    ixp_member_data[ix_id] += [import_data]
+            ixps = event_sourcing_app.get_all_ixps()
+            updated = []
+            for peeringdb_id in ixp_member_data:
+                try:
+                    log_data = {"ixp": peeringdb_id}
+                    logger.debug("Importing IXP members", extra=log_data)
+                    ixp = next(
+                        (ixp for ixp in ixps if ixp.peeringdb_id == peeringdb_id), None
+                    )
+                    if ixp is None:
+                        logger.warning("Cannot find IXP", extra=log_data)
+                        continue
+                    ixp = event_sourcing_app.import_members(
+                        ixp, ixp_member_data[peeringdb_id], processing_date
+                    )
+                    log_data["member_count"] = len(ixp.get_members(True))
+                    updated.append(ixp.id)
                     logger.debug("Imported IXP members", extra=log_data)
+                except Exception as e:
+                    logger.warning(
+                        "Cannot import IXP members",
+                        extra={"ixp": peeringdb_id, "error": str(e)},
+                    )
+            for ixp in ixps:
+                if ixp.id in updated:
+                    continue
+                logger.debug(
+                    "Marking IXP members inactive", extra={"ixp_id": ixp.peeringdb_id}
+                )
+                event_sourcing_app.check_ixp_inactive(ixp, processing_date)
         else:
             for member_data in all_member_data:
                 log_data = {"asn": member_data["asn"], "ixp": member_data["ix_id"]}
                 try:
-                    ixp = models.IXP.objects.get(peeringdb_id=member_data["ix_id"])
+                    peeringdb_id = models.IXP.objects.get(
+                        peeringdb_id=member_data["ix_id"]
+                    )
                 except models.IXP.DoesNotExist:
                     logger.warning("Cannot find IXP")
                     continue
@@ -400,7 +417,7 @@ def process_member_data(
                     logger.warning("Cannot find ASN")
                     continue
                 member, created = models.IXPMember.objects.update_or_create(
-                    ixp=ixp,
+                    ixp=peeringdb_id,
                     asn=asn,
                     defaults={
                         "last_updated": member_data["updated"],

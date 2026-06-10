@@ -44,6 +44,8 @@ def test_registers_ixp(faker: Faker):
     assert ixp.name == name
     assert ixp.long_name == long_name
     assert ixp.peeringdb_id == peeringdb_id
+    # Always mark a newly-imported IXP as inactive as we import members after the IXP
+    assert ixp.active_status is False
 
     isoc_id = app.find_by_peeringdb_id(peeringdb_id)
     assert isoc_id is not None

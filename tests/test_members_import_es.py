@@ -93,6 +93,32 @@ def test_updates_member(faker):
     assert updated.last_active > last_active
 
 
+def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
+    app, es = build_app()
+    ixp = create_ixp(faker, es, True)
+    # Create 3 existing members
+    for member_count in range(1, 4):
+        asn = create_asn(faker, es)
+        create_member(
+            faker,
+            es,
+            ixp,
+            asn,
+            {"last_active": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)},
+        )
+    assert ixp.active_status is True
+
+    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor([])
+
+    ixp = es.get_aggregate(ixp.id, IXP)
+    active_members = ixp.get_members()
+    assert len(active_members) == 0
+    all_members = ixp.get_members(True)
+    assert len(all_members) == 3
+    assert ixp.active_status is False
+
+
 def build_app(
     es_db: EventStorePersistence | None = None,
 ) -> tuple[IXPTracker, EventStore]:

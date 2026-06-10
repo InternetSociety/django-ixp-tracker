@@ -55,6 +55,26 @@ class ManrsStatusChange(DomainEvent):
     manrs_participant: bool
 
 
+@dataclass()
+class IXPBecameActive(DomainEvent):
+    active_status: bool
+
+    def __init__(self, active_status: bool = True):
+        if not active_status:
+            raise RuntimeError("IXPBecameActive must set status to True")
+        self.active_status = True
+
+
+@dataclass()
+class IXPBecameInactive(DomainEvent):
+    active_status: bool
+
+    def __init__(self, active_status: bool = False):
+        if active_status:
+            raise RuntimeError("IXPBecameInactive must set status to False")
+        self.active_status = False
+
+
 @dataclass
 class AnchorHostChange(DomainEvent):
     anchor_host: bool
@@ -168,6 +188,12 @@ class IXP(Aggregate):
             self.last_updated = datetime.strptime(event.last_updated, DATE_FORMAT)
         if not isinstance(event.org_id, ValueNotChanged):
             self.org_id = event.org_id
+
+    def became_active(self, event: IXPBecameActive):
+        self.active_status = event.active_status
+
+    def became_inactive(self, event: IXPBecameInactive):
+        self.active_status = event.active_status
 
     def manrs_status_change(self, event: ManrsStatusChange):
         self.manrs_participant = event.manrs_participant
@@ -337,6 +363,8 @@ IXP_TRACKER_EVENT_MAP = {
     ASNUpdated.__name__: ASNUpdated,
     ManrsStatusChange.__name__: ManrsStatusChange,
     IXPActiveInPeeringDb.__name__: IXPActiveInPeeringDb,
+    IXPBecameActive.__name__: IXPBecameActive,
+    IXPBecameInactive.__name__: IXPBecameInactive,
     IXPCreated.__name__: IXPCreated,
     IXPUpdated.__name__: IXPUpdated,
     IXPMemberActiveInPeeringDb.__name__: IXPMemberActiveInPeeringDb,
@@ -472,7 +500,7 @@ class IXPTracker:
                 anchor_host,
                 physical_locations,
             )
-        active_status = True
+        active_status = False
         ixp = IXP(id=uuid4())
         event = IXPCreated(
             name,
@@ -591,7 +619,7 @@ class IXPTracker:
         ixp: IXP,
         ixp_data: list[MemberImportData],
         processing_date: datetime,
-    ):
+    ) -> IXP:
         existing_members = ixp.get_members(True)
         for member in ixp_data:
             as_entity = self.get_asn(member["asn"])
@@ -642,6 +670,11 @@ class IXPTracker:
                 )
                 ixp = self.es.store(ixp, active_event)
 
+        ixp = self.check_ixp_inactive(ixp, processing_date)
+        self.es.save_snapshot(ixp)
+        return ixp
+
+    def check_ixp_inactive(self, ixp: IXP, processing_date: datetime) -> IXP:
         members = ixp.get_members()
         members_left = check_if_members_have_left(
             members, processing_date, self.geo_lookup
@@ -649,7 +682,13 @@ class IXPTracker:
         for member_left in members_left:
             left_event = IXPMemberLeft(member_left[0], stringify_date(member_left[1]))
             ixp = self.es.store(ixp, left_event)
-        self.es.save_snapshot(ixp)
+        members = ixp.get_members()
+        if ixp.active_status is False and len(members) >= 3:
+            active_event = IXPBecameActive()
+            ixp = self.es.store(ixp, active_event)
+        elif ixp.active_status is True and len(members) < 3:
+            inactive_event = IXPBecameInactive()
+            ixp = self.es.store(ixp, inactive_event)
         return ixp
 
     def find_by_peeringdb_id(self, peeringdb_id: int) -> IXP | None:
