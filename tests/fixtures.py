@@ -387,7 +387,7 @@ class TestProjection(Projection):
 
     handled = False
 
-    def do_handle(self, event: StoredEvent):
+    def do_handle(self, event: StoredEvent, aggregate: Aggregate):
         self.handled = True
 
 
