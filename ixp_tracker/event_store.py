@@ -3,7 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
-from typing import TypeVar, Protocol
+from typing import TypeVar
 from uuid import UUID
 
 # At some point we might want to change the ES persistence to depend on a neutral DTO rather than this Django model
@@ -63,22 +63,12 @@ class EventOrderInvalid(Exception):
     pass
 
 
-class AggregateLookup(Protocol):
-    def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:
-        pass
-
-
 class Projection(ABC):
-    es: AggregateLookup
-
     def __init__(self):
         if self.__getattribute__("aggregate_types") is None:
             self.aggregate_types = []
         if self.__getattribute__("events") is None:
             self.events = []
-
-    def connect(self, es: AggregateLookup):
-        self.es = es
 
     def handle(self, event: StoredEvent, aggregate: T):
         if event.aggregate_type not in self.aggregate_types:
@@ -125,7 +115,7 @@ class EventStorePersistence(ABC):
         pass
 
 
-class EventStore(AggregateLookup):
+class EventStore:
 
     def __init__(self, event_map, db: EventStorePersistence):
         self.listeners: list[Projection] = []
@@ -192,7 +182,6 @@ class EventStore(AggregateLookup):
         return aggregates
 
     def add_listener(self, projection: Projection):
-        projection.connect(self)
         self.listeners.append(projection)
 
     def save_snapshot(self, aggregate: T):

@@ -1,4 +1,4 @@
-from ixp_tracker.event_store import Projection, Aggregate, T
+from ixp_tracker.event_store import Projection, Aggregate
 from ixp_tracker.ixp_tracker_aggregates import IXPCreated, ASNCreated, ASN, IXP, IXPMemberJoined, RsPeeringStatusChange, \
     IXPMemberActiveInPeeringDb, IXPMemberLeft, PortSpeedUpdated
 from ixp_tracker.models import StoredEvent, ASNMap, IXPIdMap, IXP as LegacyIXP, IXPMembers
@@ -61,7 +61,7 @@ class IXPMemberProjection(Projection):
         RsPeeringStatusChange.__name__,
     ]
 
-    def do_handle(self, event: StoredEvent, ixp: T):
+    def do_handle(self, event: StoredEvent, ixp: Aggregate):
         if not isinstance(ixp, IXP):
             return
         asn = int(event.data["asn"])
@@ -74,6 +74,5 @@ class IXPMemberProjection(Projection):
                 "date_left": member.date_left,
                 "is_rs_peer": member.is_rs_peer,
                 "port_speed": member.port_speed,
-            }
+            },
         )
-
