@@ -69,14 +69,14 @@ class Projection(ABC):
         if self.__getattribute__("events") is None:
             self.events = []
 
-    def handle(self, event: StoredEvent):
+    def handle(self, event: StoredEvent, aggregate: T):
         if event.aggregate_type not in self.aggregate_types:
             return
         if event.event_type not in self.events:
             return
-        self.do_handle(event)
+        self.do_handle(event, aggregate)
 
-    def do_handle(self, event: StoredEvent):
+    def do_handle(self, event: StoredEvent, aggregate: T):
         pass
 
 
@@ -141,10 +141,10 @@ class EventStore:
             data=event_data,
         )
         self.db.save_event(stored_event)
-        for listener in self.listeners:
-            listener.handle(stored_event)
-
         aggregate.apply_event(event, stored_event.event_sequence)
+        for listener in self.listeners:
+            listener.handle(stored_event, aggregate)
+
         return aggregate
 
     def get_aggregate(self, aggregate_id: UUID, aggregate_type: type[T]) -> T:

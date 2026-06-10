@@ -383,7 +383,7 @@ class IXPIdMapProjection(Projection):
     aggregate_types = [IXP.__name__]
     events = [IXPCreated.__name__]
 
-    def do_handle(self, event: StoredEvent):
+    def do_handle(self, event: StoredEvent, aggregate: Aggregate):
         existing = IXPIdMap.objects.filter(aggregate_id=event.aggregate_id)
         if existing.count() > 0:
             return
@@ -414,7 +414,7 @@ class ASNList(Projection):
     aggregate_types = [ASN.__name__]
     events = [ASNCreated.__name__]
 
-    def do_handle(self, event: StoredEvent):
+    def do_handle(self, event: StoredEvent, asn: Aggregate):
         existing = ASNMap.objects.filter(aggregate_id=event.aggregate_id)
         if existing.count() > 0:
             return

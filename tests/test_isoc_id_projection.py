@@ -1,6 +1,6 @@
 import pytest
 
-from ixp_tracker.ixp_tracker import IXPIdMapProjection
+from ixp_tracker.ixp_tracker import IXPIdMapProjection, IXP
 from ixp_tracker.models import IXPIdMap
 from tests.fixtures import StoredEventFactory, IXPIdMapFactory, IXPFactory
 
@@ -10,11 +10,12 @@ pytestmark = pytest.mark.django_db
 def test_creates_new_isoc_id():
     projection = IXPIdMapProjection()
     event = StoredEventFactory(event_type="IXPCreated", aggregate_type="IXP")
+    ixp = IXP(event.aggregate_id)
 
     current = IXPIdMap.objects.all()
     assert current.count() == 0
 
-    projection.handle(event)
+    projection.handle(event, ixp)
 
     saved = IXPIdMap.objects.get(aggregate_id=event.aggregate_id)
     assert saved.id > 0
@@ -24,11 +25,12 @@ def test_creates_new_isoc_id():
 def test_handles_duplicate_events():
     projection = IXPIdMapProjection()
     event = StoredEventFactory(event_type="IXPCreated", aggregate_type="IXP")
+    ixp = IXP(event.aggregate_id)
 
     # This shouldn't happen but if it does we just handle it silently
     # If this becomes a problem we could add event sequence tracking to projections
-    projection.handle(event)
-    projection.handle(event)
+    projection.handle(event, ixp)
+    projection.handle(event, ixp)
 
     saved = IXPIdMap.objects.all()
     assert saved.count() == 1
@@ -42,11 +44,12 @@ def test_saves_peeringdb_id(faker):
         aggregate_type="IXP",
         data={"peeringdb_id": peeringdb_id},
     )
+    ixp = IXP(event.aggregate_id)
 
     current = IXPIdMap.objects.all()
     assert current.count() == 0
 
-    projection.handle(event)
+    projection.handle(event, ixp)
 
     saved = IXPIdMap.objects.get(aggregate_id=event.aggregate_id)
     assert saved.peeringdb_id == peeringdb_id
@@ -81,15 +84,16 @@ def test_uses_existing_isoc_id_when_importing_an_ixp_for_the_first_time(faker):
     IXPIdMapFactory()
     projection = IXPIdMapProjection()
     peeringdb_id = faker.random_number(digits=3)
-    ixp = IXPFactory(peeringdb_id=peeringdb_id)
+    legacy_ixp = IXPFactory(peeringdb_id=peeringdb_id)
     event = StoredEventFactory(
         event_type="IXPCreated",
         aggregate_type="IXP",
         data={"peeringdb_id": peeringdb_id},
     )
+    ixp = IXP(event.aggregate_id)
 
-    projection.handle(event)
+    projection.handle(event, ixp)
 
     saved = IXPIdMap.objects.get(aggregate_id=event.aggregate_id)
     assert saved.peeringdb_id == peeringdb_id
-    assert saved.id == ixp.id
+    assert saved.id == legacy_ixp.id
