@@ -470,14 +470,19 @@ def create_ixp(faker: Faker, es: EventStore, active_status=False) -> IXP:
     return ixp
 
 
-def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) -> ASN:
-    as_number = faker.random_number(digits=5)
+def create_asn(
+    faker: Faker,
+    es: EventStore,
+    country_code: str | None = None,
+    asn: int | None = None,
+) -> ASN:
+    as_number = asn or faker.random_number(digits=5)
     network_type = faker.random_element(NetworkType)
     name = faker.company()
     peering_policy = faker.random_element(PeeringPolicy)
     peeringdb_id = faker.random_number(digits=3)
     country_code = country_code or faker.country_code()
-    asn = ASN(id=uuid4())
+    asn_entity = ASN(id=uuid4())
     event = ASNCreated(
         as_number,
         name,
@@ -486,7 +491,7 @@ def create_asn(faker: Faker, es: EventStore, country_code: str | None = None) ->
         peeringdb_id,
         country_code,
     )
-    return es.store(asn, event)
+    return es.store(asn_entity, event)
 
 
 def create_member(

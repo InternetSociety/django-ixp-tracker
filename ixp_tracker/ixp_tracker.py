@@ -189,6 +189,13 @@ class IXPTracker:
                 logger.warning("Cannot find AS", extra={"asn": member["asn"]})
                 continue
             existing_member = existing_members.get(member["asn"])
+            member_registered_to_zz_and_has_left_already = (
+                existing_member
+                and existing_member.date_left is not None
+                and as_zz_country_check(member["asn"], processing_date, self.geo_lookup)
+            )
+            if member_registered_to_zz_and_has_left_already:
+                continue
             member_has_rejoined = (
                 existing_member
                 and existing_member.date_left is not None
@@ -295,13 +302,28 @@ def check_if_members_have_left(
             ).replace(day=1)
             end_of_month = start_of_month_after_last_active - timedelta(days=1)
             members_left.append((member_asn, end_of_month))
-        if (
-            member.date_left is None
-            and geo_lookup.get_iso2_country(member_asn, processing_date) == "ZZ"
-            and geo_lookup.get_status(member_asn, processing_date) != "assigned"
+        if member.date_left is None and as_zz_country_check(
+            member_asn, processing_date, geo_lookup
         ):
             end_of_last_month_active = member.last_active.replace(day=1) - timedelta(
                 days=1
             )
             members_left.append((member_asn, end_of_last_month_active))
     return members_left
+
+
+def as_zz_country_check(asn: int, as_at: datetime, geo_lookup: ASNGeoLookup) -> bool:
+    # AS112 is a special case, see https://www.as112.net). It's marked as registered to country ZZ in NRO so we ignore it here
+    if asn == 112:
+        return False
+    country = geo_lookup.get_iso2_country(asn, as_at)
+    status = geo_lookup.get_status(asn, as_at)
+    if country != "ZZ":
+        return False
+    if status == "assigned":
+        logger.warning(
+            "AS registered to ZZ and marked as assigned",
+            extra={"asn": asn, "date": as_at},
+        )
+        return False
+    return True

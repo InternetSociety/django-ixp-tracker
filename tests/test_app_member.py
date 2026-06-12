@@ -213,6 +213,52 @@ def test_marks_ixp_inactive_if_members_drops_below_three(
     assert ixp.active_status is False
 
 
+def test_member_marked_left_due_to_zz_country_registration_is_not_imported(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(
+        mes, TestLookup(default_country="ZZ", default_status="reserved")
+    )
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    membership_properties = {
+        "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+    member_import_data = create_member_import_data(faker, asn.number)
+
+    sequence_before_import = ixp.sequence
+    imported_member = ixp.get_members(True)[asn.number]
+
+    ixp = app.import_members(ixp, [member_import_data], date_now)
+
+    updated_member = ixp.get_members(True)[asn.number]
+    # date_left should not be updated in this case
+    assert updated_member.date_left == imported_member.date_left
+    # no extra events should have been added
+    assert ixp.sequence == sequence_before_import
+
+
+def test_as112_is_marked_as_rejoined(faker):
+    # Normally an AS with country ZZ that has been marked as left would be ignored
+    # But we want AS112 to be considered in this case as it probably means it has left and rejoined
+    mes = MemoryEventStore()
+    app, es = build_app(
+        mes, TestLookup(default_country="ZZ", default_status="reserved")
+    )
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es, asn=112)
+    membership_properties = {
+        "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
+    }
+    create_member(faker, es, ixp, asn, membership_properties)
+    member_import_data = create_member_import_data(faker, asn.number)
+
+    ixp = app.import_members(ixp, [member_import_data], date_now)
+
+    updated_member = ixp.get_members(True)[asn.number]
+    assert updated_member.date_left is None
+
+
 def build_app(
     es_db: EventStorePersistence | None = None,
     geo_lookup: ASNGeoLookup | None = None,
@@ -220,7 +266,7 @@ def build_app(
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
-    app = IXPTracker(es, geo_lookup or TestLookup())
+    app = IXPTracker(es, geo_lookup or TestLookup(default_country="US"))
     return app, es
 
 
