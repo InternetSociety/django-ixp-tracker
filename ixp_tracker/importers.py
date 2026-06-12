@@ -23,12 +23,13 @@ from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import DjangoEventStore, EventStore
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
-    IXPIdMapProjection,
+)
+from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
-    ASNList,
 )
+from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 
 logger = logging.getLogger("ixp_tracker")
 PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"

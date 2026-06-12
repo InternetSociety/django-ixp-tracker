@@ -3,7 +3,7 @@ import responses
 
 from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
 from ixp_tracker import importers
-from ixp_tracker.ixp_tracker import NetworkType, PeeringPolicy
+from ixp_tracker.ixp_tracker_aggregates import NetworkType, PeeringPolicy
 
 from .fixtures import PeeringASNFactory, build_app, TestLookup
 

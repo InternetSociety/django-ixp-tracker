@@ -10,9 +10,9 @@ from ixp_tracker.event_store import (
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
-    IXPIdMapProjection,
-    IXP_TRACKER_EVENT_MAP,
 )
+from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
+from ixp_tracker.ixp_tracker_projections import IXPIdMapProjection
 from tests.fixtures import create_ixp, MemoryEventStore, TestLookup
 
 pytestmark = pytest.mark.django_db

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from ixp_tracker.event_store import EventStore, Aggregate, DomainEvent
-from ixp_tracker.ixp_tracker import DATE_FORMAT
+from ixp_tracker.ixp_tracker_aggregates import DATE_FORMAT
 from tests.fixtures import (
     TestAggregate,
     TEST_EVENT_MAP,

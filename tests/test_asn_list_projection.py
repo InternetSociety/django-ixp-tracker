@@ -1,6 +1,7 @@
 import pytest
 
-from ixp_tracker.ixp_tracker import ASNList, ASN
+from ixp_tracker.ixp_tracker_aggregates import ASN
+from ixp_tracker.ixp_tracker_projections import ASNList
 from ixp_tracker.models import ASNMap
 from tests.fixtures import StoredEventFactory
 

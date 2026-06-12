@@ -1,6 +1,7 @@
 from datetime import timedelta, timezone, datetime
 
-from ixp_tracker.ixp_tracker import check_if_members_have_left, IXPMemberDetails
+from ixp_tracker.ixp_tracker import check_if_members_have_left
+from ixp_tracker.ixp_tracker_aggregates import IXPMemberDetails
 from tests.fixtures import TestLookup
 
 date_now = datetime.now(timezone.utc)

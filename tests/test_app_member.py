@@ -10,11 +10,10 @@ from ixp_tracker.event_store import (
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
-    IXP_TRACKER_EVENT_MAP,
-    ASNList,
-    IXPIdMapProjection,
     MemberImportData,
 )
+from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
+from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 from tests.fixtures import (
     create_ixp,
     create_asn,

@@ -1,6 +1,7 @@
 import pytest
 
-from ixp_tracker.ixp_tracker import IXPIdMapProjection, IXP
+from ixp_tracker.ixp_tracker_aggregates import IXP
+from ixp_tracker.ixp_tracker_projections import IXPIdMapProjection
 from ixp_tracker.models import IXPIdMap
 from tests.fixtures import StoredEventFactory, IXPIdMapFactory, IXPFactory
 

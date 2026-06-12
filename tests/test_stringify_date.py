@@ -1,7 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
-
-from ixp_tracker.ixp_tracker import stringify_date
+from ixp_tracker.ixp_tracker_aggregates import stringify_date
 
 
 def test_returns_expected_string_format():

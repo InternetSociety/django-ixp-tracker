@@ -8,11 +8,13 @@ from ixp_tracker.event_store import (
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
+)
+from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
-    ASNList,
 )
+from ixp_tracker.ixp_tracker_projections import ASNList
 from tests.fixtures import create_asn, MemoryEventStore, TestLookup
 
 pytestmark = pytest.mark.django_db
