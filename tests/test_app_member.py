@@ -24,7 +24,7 @@ from tests.fixtures import (
 
 pytestmark = pytest.mark.django_db
 
-date_now = datetime.now(timezone.utc)
+date_now = datetime.now(timezone.utc).replace(microsecond=0)
 
 
 def test_imports_member(faker: Faker):
@@ -85,10 +85,10 @@ def test_adds_new_membership_for_existing_member_marked_as_left(faker):
     ixp = app.import_members(ixp, [member_import_data], date_now)
 
     updated = ixp.get_members().get(asn.number)
-    assert updated.date_joined > membership_properties["end_date"]
+    assert updated.date_joined == date_now
 
 
-def test_extends_membership_for_member_marked_as_left_if_created_before_date_left(
+def test_adds_new_membership_for_member_marked_as_left_if_created_before_date_left(
     faker,
 ):
     mes = MemoryEventStore()
@@ -109,8 +109,7 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
     ixp = app.import_members(ixp, [member_import_data], date_now)
 
     updated = ixp.get_members().get(asn.number)
-    assert updated.date_joined == membership_properties["start_date"]
-    assert updated.date_left is None
+    assert updated.date_joined == date_now
 
 
 def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_memberships(
@@ -143,7 +142,7 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
     assert len(ixp.get_members()) == 1
 
 
-def test_do_not_add_new_membership_for_same_created_date(faker):
+def test_adds_new_membership_event_if_created_date_is_same(faker):
     created_date = datetime(year=2023, month=1, day=13, tzinfo=timezone.utc)
 
     mes = MemoryEventStore()
@@ -164,7 +163,8 @@ def test_do_not_add_new_membership_for_same_created_date(faker):
 
     ixp = app.import_members(ixp, [member_import], date_now)
 
-    assert len(ixp.get_members()) == 1
+    updated = ixp.get_members().get(asn.number)
+    assert updated.date_joined == date_now
 
 
 def test_marks_ixp_active_if_has_three_members(

@@ -89,12 +89,10 @@ class IXPMemberJoined(DomainEvent):
 
 
 @dataclass
-class IXPMemberUpdated(DomainEvent):
+class PortSpeedUpdated(DomainEvent):
     asn: int
-    date_joined: str | ValueNotChanged = ValueNotChanged()
-    date_left: str | ValueNotChanged = ValueNotChanged()
-    date_updated: str | ValueNotChanged = ValueNotChanged()
-    port_speed: int | ValueNotChanged = ValueNotChanged()
+    port_speed: int
+    date_updated: str
 
 
 @dataclass
@@ -107,6 +105,7 @@ class IXPMemberActiveInPeeringDb(DomainEvent):
 class RsPeeringStatusChange(DomainEvent):
     asn: int
     is_rs_peer: bool
+    date_updated: str
 
 
 @dataclass
@@ -153,8 +152,8 @@ IXP_TRACKER_EVENT_MAP = {
     IXPMemberActiveInPeeringDb.__name__: IXPMemberActiveInPeeringDb,
     IXPMemberJoined.__name__: IXPMemberJoined,
     IXPMemberLeft.__name__: IXPMemberLeft,
-    IXPMemberUpdated.__name__: IXPMemberUpdated,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
+    PortSpeedUpdated.__name__: PortSpeedUpdated,
     RsPeeringStatusChange.__name__: RsPeeringStatusChange,
 }
 
@@ -316,19 +315,11 @@ class IXP(Aggregate):
         )
         self.members[event.asn] = details
 
-    def member_updated(self, event: IXPMemberUpdated):
-        if not isinstance(event.date_joined, ValueNotChanged):
-            self.members[event.asn].date_joined = datetime.strptime(
-                event.date_joined, DATE_FORMAT
-            )
-        if not isinstance(event.date_updated, ValueNotChanged):
-            self.members[event.asn].date_updated = datetime.strptime(
-                event.date_updated, DATE_FORMAT
-            )
-        if not isinstance(event.port_speed, ValueNotChanged):
-            self.members[event.asn].port_speed = event.port_speed
-        if not isinstance(event.date_left, ValueNotChanged):
-            self.members[event.asn].date_left = None
+    def port_speed_updated(self, event: PortSpeedUpdated):
+        self.members[event.asn].date_updated = datetime.strptime(
+            event.date_updated, DATE_FORMAT
+        )
+        self.members[event.asn].port_speed = event.port_speed
 
     def member_active_in_peering_db(self, event: IXPMemberActiveInPeeringDb):
         self.members[event.asn].last_active = datetime.strptime(

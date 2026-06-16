@@ -196,44 +196,29 @@ class IXPTracker:
             )
             if member_registered_to_zz_and_has_left_already:
                 continue
+            date_updated = ixpt.stringify_date(member["updated_date"])
             member_has_rejoined = (
-                existing_member
-                and existing_member.date_left is not None
-                and existing_member.date_left < member["created_date"]
+                existing_member and existing_member.date_left is not None
             )
             if existing_member is None or member_has_rejoined:
                 join_event = ixpt.IXPMemberJoined(
                     member["asn"],
-                    ixpt.stringify_date(member["created_date"]),
-                    ixpt.stringify_date(member["updated_date"]),
+                    ixpt.stringify_date(processing_date),
+                    date_updated,
                     ixpt.stringify_date(processing_date),
                     member["is_rs_peer"],
                     member["port_speed"],
                 )
                 ixp = self.es.store(ixp, join_event)
             else:
-                updates: dict[str, Any] = {}
-                # If we already have an inactive member, but it's end_date is after the start_date we're importing,
-                # then we just unset the end_date, which makes the member active and keeps the original start_date
-                if (
-                    existing_member.date_left is not None
-                    and existing_member.date_left > member["created_date"]
-                ):
-                    updates["date_left"] = None
-                elif member["created_date"] != existing_member.date_joined:
-                    updates["date_joined"] = ixpt.stringify_date(member["created_date"])
-                if member["updated_date"] != existing_member.date_updated:
-                    updates["date_updated"] = ixpt.stringify_date(
-                        member["updated_date"]
-                    )
                 if member["port_speed"] != existing_member.port_speed:
-                    updates["port_speed"] = member["port_speed"]
-                if len(updates.keys()) > 0:
-                    update_event = ixpt.IXPMemberUpdated(member["asn"], **updates)
+                    update_event = ixpt.PortSpeedUpdated(
+                        member["asn"], member["port_speed"], date_updated
+                    )
                     ixp = self.es.store(ixp, update_event)
                 if member["is_rs_peer"] != existing_member.is_rs_peer:
                     rs_peer_event = ixpt.RsPeeringStatusChange(
-                        member["asn"], member["is_rs_peer"]
+                        member["asn"], member["is_rs_peer"], date_updated
                     )
                     ixp = self.es.store(ixp, rs_peer_event)
                 active_event = ixpt.IXPMemberActiveInPeeringDb(
