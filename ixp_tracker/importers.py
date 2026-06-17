@@ -46,7 +46,7 @@ def import_data(
         processing_date = datetime.now(timezone.utc)
         import_ixps(processing_date, additional_data, es_app)
         logger.debug("Imported IXPs")
-        import_asns(additional_data, reset, page_limit, es_app)
+        import_asns(processing_date, additional_data, reset, page_limit, es_app)
         logger.debug("Imported ASNs")
         import_members(processing_date, additional_data, es_app)
         logger.debug("Imported members")
@@ -112,7 +112,7 @@ def import_data(
         ixp_data = backfill_data.get("ix", {"data": []}).get("data", [])
         process_ixp_data(processing_date, additional_data, es_app)(ixp_data)
         asn_data = backfill_data.get("net", {"data": []}).get("data", [])
-        process_asn_data(additional_data, es_app)(asn_data)
+        process_asn_data(processing_date, additional_data, es_app)(asn_data)
         member_data = backfill_data.get("netixlan", {"data": []}).get("data", [])
         process_member_data(processing_date, additional_data, es_app)(member_data)
         toggle_ixp_active_status(processing_date, es_app)
@@ -266,6 +266,7 @@ def process_ixp_data(
 
 
 def import_asns(
+    processing_date: datetime,
     geo_lookup: ASNGeoLookup,
     reset: bool = False,
     page_limit: int = 200,
@@ -279,20 +280,22 @@ def import_asns(
             updated_since = last_updated.last_updated
     return get_data(
         "/net",
-        process_asn_data(geo_lookup, es_app),
+        process_asn_data(processing_date, geo_lookup, es_app),
         limit=page_limit,
         last_updated=updated_since,
     )
 
 
-def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker | None = None):
+def process_asn_data(
+    processing_date: datetime, geo_lookup, event_sourcing_app: IXPTracker | None = None
+):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
             try:
                 asn = int(asn_data["asn"])
                 last_updated = dateutil.parser.isoparse(asn_data["updated"])
-                country_code = geo_lookup.get_iso2_country(asn, last_updated)
                 if event_sourcing_app:
+                    country_code = geo_lookup.get_iso2_country(asn, processing_date)
                     try:
                         network_type = NetworkType(asn_data["info_type"])
                     except ValueError:
@@ -310,6 +313,7 @@ def process_asn_data(geo_lookup, event_sourcing_app: IXPTracker | None = None):
                         country_code,
                     )
                 else:
+                    country_code = geo_lookup.get_iso2_country(asn, last_updated)
                     models.ASN.objects.update_or_create(
                         peeringdb_id=asn_data["id"],
                         defaults={
