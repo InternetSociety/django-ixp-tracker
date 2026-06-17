@@ -28,10 +28,12 @@ from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
+)
+from ixp_tracker.ixp_tracker_projections import (
     ASNList,
+    IXPIdMapProjection,
     IXPMemberProjection,
 )
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 
 logger = logging.getLogger("ixp_tracker")
 PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"

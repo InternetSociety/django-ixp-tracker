@@ -116,7 +116,6 @@ class EventStorePersistence(ABC):
 
 
 class EventStore:
-
     def __init__(self, event_map, db: EventStorePersistence):
         self.listeners: list[Projection] = []
         self.event_map: dict[str, type[DomainEvent]] = event_map

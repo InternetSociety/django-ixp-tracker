@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("ixp_tracker", "0024_aggregatesnapshot"),
+        ("ixp_tracker", "0026_statsperixpes"),
     ]
 
     operations = [

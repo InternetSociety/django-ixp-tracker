@@ -1,7 +1,22 @@
 from ixp_tracker.event_store import Projection, Aggregate
-from ixp_tracker.ixp_tracker_aggregates import IXPCreated, ASNCreated, ASN, IXP, IXPMemberJoined, RsPeeringStatusChange, \
-    IXPMemberActiveInPeeringDb, IXPMemberLeft, PortSpeedUpdated
-from ixp_tracker.models import StoredEvent, ASNMap, IXPIdMap, IXP as LegacyIXP, IXPMembers
+from ixp_tracker.ixp_tracker_aggregates import (
+    IXPCreated,
+    ASNCreated,
+    ASN,
+    IXP,
+    IXPMemberJoined,
+    RsPeeringStatusChange,
+    IXPMemberActiveInPeeringDb,
+    IXPMemberLeft,
+    PortSpeedUpdated,
+)
+from ixp_tracker.models import (
+    StoredEvent,
+    ASNMap,
+    IXPIdMap,
+    IXP as LegacyIXP,
+    IXPMembers,
+)
 
 
 class ASNList(Projection):

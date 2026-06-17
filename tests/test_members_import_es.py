@@ -4,9 +4,7 @@ import pytest
 
 from ixp_tracker import importers
 from ixp_tracker.event_store import EventStorePersistence, EventStore, DjangoEventStore
-from ixp_tracker.ixp_tracker import (
-    IXPTracker,
-)
+from ixp_tracker.ixp_tracker import IXPTracker
 from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP, IXP
 from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 from tests.fixtures import (
