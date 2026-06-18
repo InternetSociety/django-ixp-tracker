@@ -239,6 +239,7 @@ class IXP(Aggregate):
     org_id: int
     physical_locations: int | None
     members: dict[int, IXPMemberDetails]
+    member_history: list[tuple[int, IXPMemberDetails]]
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -256,6 +257,7 @@ class IXP(Aggregate):
         self.org_id = event.org_id
         self.physical_locations = event.physical_locations
         self.members = {}
+        self.member_history = []
 
     def updated(self, event: IXPUpdated):
         if not isinstance(event.name, ValueNotChanged):
@@ -294,11 +296,24 @@ class IXP(Aggregate):
         self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
 
     def get_members(
-        self, include_inactive: bool = False
+        self, include_inactive: bool = False, as_at: datetime | None = None
     ) -> dict[int, IXPMemberDetails]:
         if include_inactive:
             return self.members
         member_list = {}
+        if as_at is not None:
+            for member_asn in self.members.keys():
+                member = self.members[member_asn]
+                if member.date_joined <= as_at and (
+                    member.date_left is None or member.date_left >= as_at
+                ):
+                    member_list[member_asn] = member
+            for member_asn, member in self.member_history:
+                if member.date_joined <= as_at and (
+                    member.date_left is None or member.date_left >= as_at
+                ):
+                    member_list[member_asn] = member
+            return member_list
         for member_asn in self.members.keys():
             member = self.members[member_asn]
             if member.date_left is None:
@@ -313,6 +328,8 @@ class IXP(Aggregate):
             event.is_rs_peer,
             event.port_speed,
         )
+        if self.members.get(event.asn) is not None:
+            self.member_history.append((event.asn, self.members[event.asn]))
         self.members[event.asn] = details
 
     def port_speed_updated(self, event: PortSpeedUpdated):
@@ -341,21 +358,24 @@ class IXP(Aggregate):
         values["last_active"] = stringify_date(values["last_active"])
         values["members"] = dict(values["members"])
         for member_asn in values["members"].keys():
-            values["members"][member_asn] = dict(values["members"][member_asn].__dict__)
-            values["members"][member_asn]["date_joined"] = stringify_date(
-                values["members"][member_asn]["date_joined"]
+            values["members"][member_asn] = self.snapshot_member_details(
+                self.members[member_asn]
             )
-            values["members"][member_asn]["date_updated"] = stringify_date(
-                values["members"][member_asn]["date_updated"]
+        values["member_history"] = []
+        for member_asn, details in self.member_history:
+            values["member_history"].append(
+                (member_asn, self.snapshot_member_details(details))
             )
-            values["members"][member_asn]["last_active"] = stringify_date(
-                values["members"][member_asn]["last_active"]
-            )
-            if values["members"][member_asn]["date_left"]:
-                values["members"][member_asn]["date_left"] = stringify_date(
-                    values["members"][member_asn]["date_left"]
-                )
         return values
+
+    def snapshot_member_details(self, details: IXPMemberDetails) -> dict[str, str]:
+        snapshot = dict(details.__dict__)
+        snapshot["date_joined"] = stringify_date(snapshot["date_joined"])
+        snapshot["date_updated"] = stringify_date(snapshot["date_updated"])
+        snapshot["last_active"] = stringify_date(snapshot["last_active"])
+        if snapshot["date_left"]:
+            snapshot["date_left"] = stringify_date(snapshot["date_left"])
+        return snapshot
 
     def hydrate(self, data: dict):
         super().hydrate(data)
@@ -365,25 +385,35 @@ class IXP(Aggregate):
         members = {}
         for member_asn in self.members.keys():
             member_details = self.members[member_asn]
-            member_details["date_joined"] = datetime.strptime(  # type: ignore
-                self.members[member_asn]["date_joined"],  # type: ignore
-                DATE_FORMAT,
-            )
-            member_details["date_updated"] = datetime.strptime(  # type: ignore
-                self.members[member_asn]["date_updated"],  # type: ignore
-                DATE_FORMAT,
-            )
-            member_details["last_active"] = datetime.strptime(  # type: ignore
-                self.members[member_asn]["last_active"],  # type: ignore
-                DATE_FORMAT,
-            )
-            if member_details["date_left"]:  # type: ignore
-                member_details["date_left"] = datetime.strptime(  # type: ignore
-                    self.members[member_asn]["date_left"],  # type: ignore
-                    DATE_FORMAT,
-                )
-            members[int(member_asn)] = IXPMemberDetails(**member_details)  # type: ignore
+            members[int(member_asn)] = self.hydrate_member_details(member_details)  # type: ignore
         self.members = members
+        self.member_history = []
+        for member_asn, member_details in data["member_history"]:
+            self.member_history.append(
+                (member_asn, self.hydrate_member_details(member_details))
+            )
+
+    def hydrate_member_details(
+        self, member_details: dict[str, str]
+    ) -> IXPMemberDetails:
+        member_details["date_joined"] = datetime.strptime(  # type: ignore
+            member_details["date_joined"],  # type: ignore
+            DATE_FORMAT,
+        )
+        member_details["date_updated"] = datetime.strptime(  # type: ignore
+            member_details["date_updated"],  # type: ignore
+            DATE_FORMAT,
+        )
+        member_details["last_active"] = datetime.strptime(  # type: ignore
+            member_details["last_active"],  # type: ignore
+            DATE_FORMAT,
+        )
+        if member_details["date_left"]:  # type: ignore
+            member_details["date_left"] = datetime.strptime(  # type: ignore
+                member_details["date_left"],  # type: ignore
+                DATE_FORMAT,
+            )
+        return IXPMemberDetails(**member_details)  # type: ignore
 
 
 def stringify_date(date_value: datetime) -> str:
