@@ -255,6 +255,36 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     )
 
 
+class StatsPerIXPESFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = legacy.StatsPerIXPES
+
+    ixp = None
+    stats_date = factory.Faker(
+        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
+    capacity = factory.Faker("random_number", digits=5)
+    members = factory.Faker("random_number", digits=3)
+    domestic_network_membership = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    domestic_network_coverage = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    rs_peering_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    members_joined_last_12_months = factory.Faker("random_number", digits=2)
+    members_left_last_12_months = factory.Faker("random_number", digits=2)
+    monthly_members_change = factory.Faker("random_number", digits=2)
+    monthly_members_change_percent = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    last_generated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
+
+
 class MockLookup(AdditionalDataSources):
     def __init__(
         self,
@@ -418,7 +448,14 @@ class MemoryEventStore(EventStorePersistence):
         return [e for e in events if e.event_sequence > sequence]
 
     def get_all(self, aggregate_type: type[T]) -> list[UUID]:
-        return []
+        aggregates = set(
+            [
+                e.aggregate_id
+                for e in self.events
+                if e.aggregate_type == aggregate_type.__name__
+            ]
+        )
+        return list(aggregates)
 
     def get_events(self) -> list[StoredEvent]:
         return self.events
@@ -444,7 +481,12 @@ def build_app() -> IXPTracker:
     return app
 
 
-def create_ixp(faker: Faker, es: EventStore, active_status=False) -> IXP:
+def create_ixp(
+    faker: Faker,
+    es: EventStore,
+    active_status=False,
+    created_date: datetime | None = None,
+) -> IXP:
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
@@ -458,7 +500,10 @@ def create_ixp(faker: Faker, es: EventStore, active_status=False) -> IXP:
         faker.url(schemes=["https"]),
         False,
         faker.country_code(),
-        stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        stringify_date(
+            created_date
+            or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)
+        ),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
         False,
@@ -509,8 +554,8 @@ def create_member(
         or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         "last_active": overrides.get("last_active")
         or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
-        "is_rs_peer": faker.boolean(),
-        "port_speed": faker.random_number(digits=5),
+        "is_rs_peer": overrides.get("is_rs_peer", faker.boolean()),
+        "port_speed": overrides.get("port_speed") or faker.random_number(digits=5),
     }
     event = IXPMemberJoined(
         asn.number,

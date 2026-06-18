@@ -149,6 +149,34 @@ class StatsPerIXP(models.Model):
         ]
 
 
+class StatsPerIXPES(models.Model):
+    ixp = models.IntegerField()  # The ISOC id
+    stats_date = models.DateField()
+    capacity = models.FloatField()
+    members = models.IntegerField()
+    # local_asns_members_rate = models.FloatField() - removed, we don't use this anywhere
+    domestic_network_membership = models.FloatField()
+    domestic_network_coverage = models.FloatField()  # renamed
+    rs_peering_rate = models.FloatField()
+    members_joined_last_12_months = models.IntegerField()
+    members_left_last_12_months = models.IntegerField()
+    monthly_members_change = models.IntegerField()
+    monthly_members_change_percent = models.FloatField()
+    last_generated = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.ixp.name} - {self.stats_date}"
+
+    class Meta:
+        verbose_name = "IXP stats"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ixp", "stats_date"], name="ixp_tracker_es_unique_ixp_stats"
+            )
+        ]
+
+
 class StatsPerCountry(models.Model):
     country_code = models.CharField(max_length=2)
     stats_date = models.DateField()

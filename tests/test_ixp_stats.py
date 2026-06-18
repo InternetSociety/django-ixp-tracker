@@ -3,9 +3,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from ixp_tracker.models import StatsPerIXP
-from ixp_tracker.stats import calculate_local_asns_members_rate, generate_stats
-from tests.fixtures import ASNFactory, IXPFactory, IXPMembershipRecordFactory, MockLookup, StatsPerIXPFactory, \
-    create_member_fixture
+from ixp_tracker.stats import generate_stats
+from tests.fixtures import (
+    ASNFactory,
+    IXPFactory,
+    IXPMembershipRecordFactory,
+    MockLookup,
+    StatsPerIXPFactory,
+    create_member_fixture,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -20,7 +26,9 @@ def test_with_no_data_generates_no_stats():
 def test_generates_capacity_rs_peering_and_member_count():
     ixp = IXPFactory()
     create_member_fixture(ixp, membership_properties={"speed": 500, "is_rs_peer": True})
-    create_member_fixture(ixp, membership_properties={"speed": 10000, "is_rs_peer": False})
+    create_member_fixture(
+        ixp, membership_properties={"speed": 10000, "is_rs_peer": False}
+    )
 
     generate_stats(MockLookup())
 
@@ -46,8 +54,17 @@ def test_generates_stats_for_first_of_month():
 
 def test_does_not_count_members_marked_as_left():
     ixp = IXPFactory()
-    create_member_fixture(ixp, membership_properties={"speed": 500, "is_rs_peer": False})
-    create_member_fixture(ixp, membership_properties={"speed": 10000, "is_rs_peer": True, "end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)})
+    create_member_fixture(
+        ixp, membership_properties={"speed": 500, "is_rs_peer": False}
+    )
+    create_member_fixture(
+        ixp,
+        membership_properties={
+            "speed": 10000,
+            "is_rs_peer": True,
+            "end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc),
+        },
+    )
 
     generate_stats(MockLookup())
 
@@ -59,7 +76,12 @@ def test_does_not_count_members_marked_as_left():
 
 def test_does_not_count_member_twice_if_they_rejoin():
     ixp = IXPFactory()
-    member = create_member_fixture(ixp, membership_properties={"end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)})
+    member = create_member_fixture(
+        ixp,
+        membership_properties={
+            "end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
+        },
+    )
     IXPMembershipRecordFactory(member=member)
 
     generate_stats(MockLookup())
@@ -71,8 +93,12 @@ def test_does_not_count_member_twice_if_they_rejoin():
 def test_does_not_count_members_not_yet_created():
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
     ixp = IXPFactory(created=stats_date)
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)})
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=4, day=1)})
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)}
+    )
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2024, month=4, day=1)}
+    )
 
     generate_stats(MockLookup(), stats_date)
 
@@ -96,7 +122,12 @@ def test_saves_local_asns_members_rate():
     local_member_one = create_member_fixture(ixp_one)
     create_member_fixture(ixp_one, quantity=2)
 
-    local_asns = [local_member_one.asn.number, ASNFactory().number, ASNFactory().number, ASNFactory().number]
+    local_asns = [
+        local_member_one.asn.number,
+        ASNFactory().number,
+        ASNFactory().number,
+        ASNFactory().number,
+    ]
     generate_stats(MockLookup(asns=local_asns))
 
     ixp_stats = StatsPerIXP.objects.all().first()
@@ -108,44 +139,51 @@ def test_saves_local_routed_asns_members_rate():
     local_member_one = create_member_fixture(ixp_one)
     create_member_fixture(ixp_one, quantity=2)
 
-    local_asns = [local_member_one.asn.number, ASNFactory().number, ASNFactory().number, ASNFactory().number]
+    local_asns = [
+        local_member_one.asn.number,
+        ASNFactory().number,
+        ASNFactory().number,
+        ASNFactory().number,
+    ]
     generate_stats(MockLookup(routed_asns=local_asns))
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.local_routed_asns_members_rate == 0.25
 
 
-def test_calculate_local_asns_members_rate_returns_zero_if_no_asns_in_country():
-    rate = calculate_local_asns_members_rate([12345], [])
-
-    assert rate == 0
-
-
-def test_calculate_local_asns_members_rate():
-    rate = calculate_local_asns_members_rate([12345], [12345, 446, 789, 5050, 54321])
-
-    assert rate == 0.2
-
-
-def test_calculate_local_asns_members_rate_ignores_members_not_in_country_list():
-    rate = calculate_local_asns_members_rate([12345, 789], [12345, 446, 5050, 54321])
-
-    assert rate == 0.25
-
-
 def test_counts_net_joins_and_net_leaves_since_12_months():
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
     ixp = IXPFactory(created=stats_date)
     # One member joined more than 12 months ago and is still a member (i.e. not counted in either)
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)})
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)}
+    )
     # Two members joined within the last 12 months
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)})
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=12, day=1)})
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2024, month=1, day=1)}
+    )
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2023, month=12, day=1)}
+    )
     # One member joined more than 12 months ago but has since left
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2022, month=11, day=1), "end_date": datetime(year=2023, month=6, day=17)})
+    create_member_fixture(
+        ixp,
+        membership_properties={
+            "start_date": datetime(year=2022, month=11, day=1),
+            "end_date": datetime(year=2023, month=6, day=17),
+        },
+    )
     # One member left and rejoined within the 12 months (so should not be counted)
-    member = create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2022, month=11, day=1), "end_date": datetime(year=2023, month=6, day=17)})
-    IXPMembershipRecordFactory(member=member, start_date=datetime(year=2023, month=11, day=1))
+    member = create_member_fixture(
+        ixp,
+        membership_properties={
+            "start_date": datetime(year=2022, month=11, day=1),
+            "end_date": datetime(year=2023, month=6, day=17),
+        },
+    )
+    IXPMembershipRecordFactory(
+        member=member, start_date=datetime(year=2023, month=11, day=1)
+    )
 
     generate_stats(MockLookup(), stats_date)
 
@@ -158,8 +196,14 @@ def test_adds_member_growth_stats():
     stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
     ixp = IXPFactory(created=stats_date)
     # Has 5 current members
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2023, month=1, day=1)}, quantity=4)
-    create_member_fixture(ixp, membership_properties={"start_date": datetime(year=2025, month=2, day=2)})
+    create_member_fixture(
+        ixp,
+        membership_properties={"start_date": datetime(year=2023, month=1, day=1)},
+        quantity=4,
+    )
+    create_member_fixture(
+        ixp, membership_properties={"start_date": datetime(year=2025, month=2, day=2)}
+    )
 
     generate_stats(MockLookup(), stats_date)
 
@@ -174,7 +218,12 @@ def test_saves_local_routed_asns_members_and_customers_rate():
     create_member_fixture(ixp_one, quantity=2)
     customer_asn = ASNFactory().number
 
-    local_asns = [local_member_one.asn.number, customer_asn, ASNFactory().number, ASNFactory().number]
+    local_asns = [
+        local_member_one.asn.number,
+        customer_asn,
+        ASNFactory().number,
+        ASNFactory().number,
+    ]
     generate_stats(MockLookup(routed_asns=local_asns, customer_asns=[customer_asn]))
 
     ixp_stats = StatsPerIXP.objects.all().first()
@@ -187,8 +236,12 @@ def test_updates_existing_stats():
     stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
     last_generated = stats_date + timedelta(days=1)
     ixp_one = IXPFactory(created=stats_date)
-    create_member_fixture(ixp_one, quantity=2, membership_properties={"start_date": stats_date})
-    existing = StatsPerIXPFactory(stats_date=stats_date, ixp=ixp_one, members=1, last_generated=last_generated)
+    create_member_fixture(
+        ixp_one, quantity=2, membership_properties={"start_date": stats_date}
+    )
+    existing = StatsPerIXPFactory(
+        stats_date=stats_date, ixp=ixp_one, members=1, last_generated=last_generated
+    )
 
     generate_stats(MockLookup(), stats_date)
 

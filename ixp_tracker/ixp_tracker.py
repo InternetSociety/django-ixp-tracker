@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import TypedDict, Any
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.event_store import (
@@ -262,6 +262,13 @@ class IXPTracker:
             id_map = IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
             return self.es.get_aggregate(id_map.aggregate_id, ixpt.IXP)
         except (IXPIdMap.DoesNotExist, AggregateNotFound):
+            return None
+
+    def find_isoc_id(self, aggregate_id: UUID) -> int | None:
+        try:
+            id_map = IXPIdMap.objects.get(aggregate_id=aggregate_id)
+            return id_map.id
+        except IXPIdMap.DoesNotExist:
             return None
 
     def get_all_ixps(self):
