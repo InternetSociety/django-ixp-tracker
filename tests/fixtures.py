@@ -8,7 +8,7 @@ import factory
 from faker import Faker
 from typing_extensions import NotRequired
 
-from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
+from ixp_tracker.data_lookup import AdditionalDataSources
 from ixp_tracker.event_store import (
     DomainEvent,
     ValueNotChanged,
@@ -492,6 +492,8 @@ def create_asn(
         peering_policy.value,
         peeringdb_id,
         country_code,
+        faker.pybool(),
+        faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
     return es.store(asn_entity, event)
 
@@ -527,12 +529,20 @@ def create_member(
     return ixp
 
 
-class TestLookup(ASNGeoLookup):
+class TestLookup(AdditionalDataSources):
     __test__ = False
 
-    def __init__(self, default_status: str = "assigned", default_country: str = "US"):
+    def __init__(
+        self,
+        default_status: str = "assigned",
+        default_country: str = "US",
+        routed_asns: list[int] | None = None,
+        customer_asns: list[int] | None = None,
+    ):
         self.default_status = default_status
         self.default_country = default_country
+        self.routed_asns = routed_asns or []
+        self.customer_asns = customer_asns or []
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
         return self.default_country
@@ -546,4 +556,13 @@ class TestLookup(ASNGeoLookup):
         return []
 
     def get_routed_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
+        return self.routed_asns
+
+    def get_customer_asns(self, asns: list[int], as_at: datetime) -> list[int]:
+        return self.customer_asns
+
+    def get_manrs_participants(self, as_at: datetime) -> list[int]:
+        return []
+
+    def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
         return []

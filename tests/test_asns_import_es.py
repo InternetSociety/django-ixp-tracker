@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 
 import pytest
 import responses
+from faker import Faker
 
 from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
 from ixp_tracker import importers
-from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.ixp_tracker_aggregates import NetworkType, PeeringPolicy
 
 from .fixtures import PeeringASNFactory, build_app, TestLookup
@@ -27,19 +27,30 @@ def test_with_no_existing_data_gets_all_data():
     with responses.RequestsMock() as rsps:
         app = build_app()
         rsps.get(url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0", body="")
-        importers.import_asns(TestLookup(), False, es_app=app)
+        importers.import_asns(processing_date, TestLookup(), False, es_app=app)
 
         asns = app.get_all_asns()
         assert len(asns) == 0
 
 
-def test_imports_new_asn():
+def test_imports_new_asn(faker: Faker):
     app = build_app()
-    processor = importers.process_asn_data(processing_date, TestLookup(), app)
-    processor([PeeringASNFactory()])
+    data_to_import = PeeringASNFactory()
+    customer_asns = faker.pylist(
+        nb_elements=10, variable_nb_elements=True, value_types=[int]
+    )
+    processor = importers.process_asn_data(
+        processing_date,
+        TestLookup(routed_asns=[data_to_import["asn"]], customer_asns=customer_asns),
+        app,
+    )
+    processor([data_to_import])
 
     asns = app.get_all_asns()
     assert len(asns) == 1
+    as_entity = asns[0]
+    assert as_entity.is_routed
+    assert as_entity.customer_asns == customer_asns
 
 
 def test_uses_defaults_for_network_type_and_peering_policy_if_invalid():
@@ -68,6 +79,8 @@ def test_updates_existing_data(faker):
         PeeringPolicy.OPEN,
         updated_asn_data["id"],
         faker.country_code(),
+        faker.pybool(),
+        faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
 
     processor = importers.process_asn_data(
@@ -98,32 +111,11 @@ def test_handles_errors_with_source_data():
 def test_uses_registration_country_at_processing_date():
     updated_date = processing_date.replace(year=(processing_date.year - 1))
 
-    class DateSensitiveLookup(ASNGeoLookup):
-        __test__ = False
-
-        def __init__(
-            self, default_status: str = "assigned", default_country: str = "US"
-        ):
-            self.default_status = default_status
-            self.default_country = default_country
-
+    class DateSensitiveLookup(TestLookup):
         def get_iso2_country(self, asn: int, as_at: datetime) -> str:
             if as_at.year == updated_date.year:
                 return "FR"
             return self.default_country
-
-        def get_status(self, asn: int, as_at: datetime) -> str:
-            assert as_at <= datetime.now(timezone.utc)
-            assert asn > 0
-            return self.default_status
-
-        def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
-            return []
-
-        def get_routed_asns_for_country(
-            self, country: str, as_at: datetime
-        ) -> list[int]:
-            return []
 
     app = build_app()
     processor = importers.process_asn_data(processing_date, DateSensitiveLookup(), app)

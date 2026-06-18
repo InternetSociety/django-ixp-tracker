@@ -269,7 +269,7 @@ def process_ixp_data(
 
 def import_asns(
     processing_date: datetime,
-    geo_lookup: ASNGeoLookup,
+    geo_lookup: AdditionalDataSources,
     reset: bool = False,
     page_limit: int = 200,
     es_app: IXPTracker | None = None,
@@ -289,7 +289,9 @@ def import_asns(
 
 
 def process_asn_data(
-    processing_date: datetime, geo_lookup, event_sourcing_app: IXPTracker | None = None
+    processing_date: datetime,
+    geo_lookup: AdditionalDataSources,
+    event_sourcing_app: IXPTracker | None = None,
 ):
     def process_asn_paged_data(all_asn_data):
         for asn_data in all_asn_data:
@@ -298,6 +300,9 @@ def process_asn_data(
                 last_updated = dateutil.parser.isoparse(asn_data["updated"])
                 if event_sourcing_app:
                     country_code = geo_lookup.get_iso2_country(asn, processing_date)
+                    routed_asns = geo_lookup.get_routed_asns_for_country(
+                        country_code, processing_date
+                    )
                     try:
                         network_type = NetworkType(asn_data["info_type"])
                     except ValueError:
@@ -313,6 +318,8 @@ def process_asn_data(
                         peering_policy,
                         asn_data["id"],
                         country_code,
+                        asn in routed_asns,
+                        geo_lookup.get_customer_asns([asn], processing_date),
                     )
                 else:
                     country_code = geo_lookup.get_iso2_country(asn, last_updated)

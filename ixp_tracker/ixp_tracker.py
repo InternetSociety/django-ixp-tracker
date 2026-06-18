@@ -145,10 +145,12 @@ class IXPTracker:
         peering_policy: ixpt.PeeringPolicy,
         peeringdb_id: int,
         country_code,
+        is_routed: bool,
+        customer_asns: list[int],
     ):
         entity = self.get_asn(as_number)
         if entity:
-            updates = {}
+            updates: dict[str, Any] = {}
             if name != entity.name:
                 updates["name"] = name
             if network_type != entity.network_type:
@@ -157,6 +159,10 @@ class IXPTracker:
                 updates["peering_policy"] = peering_policy.value
             if country_code != entity.country_code:
                 updates["country_code"] = country_code
+            if is_routed != entity.is_routed:
+                updates["is_routed"] = is_routed
+            if customer_asns != entity.customer_asns:
+                updates["customer_asns"] = customer_asns
             if len(updates.keys()) > 0:
                 update_event = ixpt.ASNUpdated(**updates)
                 entity = self.es.store(entity, update_event)
@@ -172,6 +178,8 @@ class IXPTracker:
                 peering_policy.value,
                 peeringdb_id,
                 country_code,
+                is_routed,
+                customer_asns,
             )
             entity = self.es.store(entity, event)
         return entity

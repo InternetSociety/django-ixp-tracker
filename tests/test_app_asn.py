@@ -35,6 +35,8 @@ def test_registers_asn(faker: Faker):
         peering_policy,
         peeringdb_id,
         faker.country_code(),
+        faker.pybool(),
+        faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
 
     assert asn.name == name
@@ -54,6 +56,10 @@ def test_updates_asn(faker):
     new_network_policy = faker.random_element(NetworkType)
     new_peering_policy = faker.random_element(PeeringPolicy)
     new_country = faker.country_code()
+    new_is_routed = not asn.is_routed
+    new_customer_asns = faker.pylist(
+        nb_elements=10, variable_nb_elements=True, value_types=[int]
+    )
     app.import_asn(
         asn.number,
         new_name,
@@ -61,11 +67,15 @@ def test_updates_asn(faker):
         new_peering_policy,
         asn.peeringdb_id,
         new_country,
+        new_is_routed,
+        new_customer_asns,
     )
 
     [_event_created, update_event] = mes.events
     assert update_event.event_type == "ASNUpdated"
     assert update_event.data["name"] == new_name
+    assert update_event.data["is_routed"] == new_is_routed
+    assert update_event.data["customer_asns"] == new_customer_asns
 
 
 def test_does_not_update_fields_if_not_changed(faker):
@@ -81,6 +91,8 @@ def test_does_not_update_fields_if_not_changed(faker):
         asn.peering_policy,
         asn.peeringdb_id,
         asn.country_code,
+        asn.is_routed,
+        asn.customer_asns,
     )
 
     [_event_created, update_event] = mes.events
@@ -104,6 +116,8 @@ def test_records_peeringdb_id_change_as_separate_event(faker):
         asn.peering_policy,
         asn.peeringdb_id + 1,
         asn.country_code,
+        asn.is_routed,
+        asn.customer_asns,
     )
 
     [_event_created, update_event] = mes.events

@@ -122,6 +122,8 @@ class ASNCreated(DomainEvent):
     peering_policy: str
     peeringdb_id: int
     country_code: str
+    is_routed: bool
+    customer_asns: list[int]
 
 
 @dataclass
@@ -130,6 +132,8 @@ class ASNUpdated(DomainEvent):
     network_type: str | ValueNotChanged = ValueNotChanged()
     peering_policy: str | ValueNotChanged = ValueNotChanged()
     country_code: str | ValueNotChanged = ValueNotChanged()
+    is_routed: bool | ValueNotChanged = ValueNotChanged()
+    customer_asns: list[int] | ValueNotChanged = ValueNotChanged()
 
 
 # We don't think this should ever happen but record as a separate event if it does
@@ -190,6 +194,8 @@ class ASN(Aggregate):
     network_type: NetworkType
     peering_policy: PeeringPolicy
     country_code: str
+    is_routed: bool
+    customer_asns: list[int]
 
     def created(self, event: ASNCreated):
         self.name = event.name
@@ -198,6 +204,8 @@ class ASN(Aggregate):
         self.network_type = NetworkType(event.network_type)
         self.peering_policy = PeeringPolicy(event.peering_policy)
         self.country_code = event.country_code
+        self.is_routed = event.is_routed
+        self.customer_asns = event.customer_asns
 
     def updated(self, event: ASNUpdated):
         if not isinstance(event.name, ValueNotChanged):
