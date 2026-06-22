@@ -7,13 +7,15 @@ from django.db.models.expressions import F
 from django_countries import countries
 from ixp_tracker.ixp_tracker import IXPTracker
 
-from ixp_tracker.importers import AdditionalDataSources, is_ixp_active, build_app
+from ixp_tracker.importers import AdditionalDataSources, build_app
+from ixp_tracker.ixp_tracker_aggregates import is_ixp_active
 from ixp_tracker.models import (
     IXP,
     IXPMembershipRecord,
     StatsPerCountry,
     StatsPerIXP,
     StatsPerIXPES,
+    StatsPerCountryES,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -23,8 +25,8 @@ class CountryStats(TypedDict):
     ixp_count: int
     all_asns: Union[List[int], None]
     routed_asns: Union[List[int], None]
-    member_asns: set
-    member_and_customer_asns: set
+    member_asns: set[int]
+    member_and_customer_asns: set[int]
     total_capacity: int
 
 
@@ -44,6 +46,16 @@ def do_generate_stats(
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
     date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
     ixps = IXP.objects.filter(created__lte=stats_date).all()
+    all_stats_per_country: Dict[str, CountryStats] = {}
+    for code, _ in list(countries):
+        all_stats_per_country[code] = {
+            "ixp_count": 0,
+            "all_asns": None,
+            "routed_asns": None,
+            "member_asns": set(),
+            "member_and_customer_asns": set(),
+            "total_capacity": 0,
+        }
     if es_app is None:
         all_memberships = (
             IXPMembershipRecord.objects.filter(
@@ -90,16 +102,6 @@ def do_generate_stats(
             .order_by(F("end_date").desc(nulls_first=True))
             .all()
         )
-        all_stats_per_country: Dict[str, CountryStats] = {}
-        for code, _ in list(countries):
-            all_stats_per_country[code] = {
-                "ixp_count": 0,
-                "all_asns": None,
-                "routed_asns": None,
-                "member_asns": set(),
-                "member_and_customer_asns": set(),
-                "total_capacity": 0,
-            }
         for ixp in ixps:
             logger.debug("Calculating growth stats for IXP", extra={"ixp": ixp.id})
             members = [
@@ -232,16 +234,16 @@ def do_generate_stats(
                 )
             local_asns_members_rate = calculate_local_asns_members_rate(
                 country_stats["member_asns"],
-                country_stats["all_asns"],  # type: ignore
+                list(country_stats["all_asns"] or []),
             )
             local_routed_asns_members_rate = calculate_local_asns_members_rate(
                 country_stats["member_asns"],
-                country_stats["routed_asns"],  # type: ignore
+                list(country_stats["routed_asns"] or []),
             )
             local_routed_asns_members_customers_rate = (
                 calculate_local_asns_members_rate(
                     country_stats["member_and_customer_asns"],
-                    country_stats["routed_asns"],  # type: ignore
+                    list(country_stats["routed_asns"] or []),
                 )
             )
             StatsPerCountry.objects.update_or_create(
@@ -266,7 +268,7 @@ def do_generate_stats(
             if ixp.date_created > stats_date:
                 continue
             isoc_id = es_app.find_isoc_id(ixp.id)
-            members = ixp.get_members()
+            members = ixp.get_members(as_at=stats_date)
             member_asns = list(members.keys())
             member_count = len(member_asns)
             total_capacity = sum([m.port_speed for m in members.values()])
@@ -310,6 +312,56 @@ def do_generate_stats(
                     "monthly_members_change_percent": calculate_growth_members_percent(
                         growth_members, num_members_last_month
                     ),
+                    "last_generated": date_now,
+                },
+            )
+            if all_stats_per_country.get(ixp.country_code, None) is None:
+                logger.warning(
+                    "IXP has possible invalid country",
+                    extra={"ixp": isoc_id, "country": ixp.country_code},
+                )
+            # ixp.active_status only gives us the current active state, we need the historical state so we check the member list directly
+            if is_ixp_active(member_asns):
+                all_stats_per_country[ixp.country_code]["ixp_count"] += 1
+                all_stats_per_country[ixp.country_code]["member_asns"] |= set(
+                    member_asns
+                )
+                all_stats_per_country[ixp.country_code]["member_and_customer_asns"] |= (
+                    set(member_asns)
+                )
+                all_stats_per_country[ixp.country_code]["member_and_customer_asns"] |= (
+                    set(customer_asns)
+                )
+        for code, _ in list(countries):
+            country_stats = all_stats_per_country[code]
+            if country_stats.get("all_asns") is None:
+                country_stats["all_asns"] = lookup.get_asns_for_country(
+                    code, stats_date
+                )
+            if country_stats.get("routed_asns") is None:
+                country_stats["routed_asns"] = lookup.get_routed_asns_for_country(
+                    code, stats_date
+                )
+            local_routed_asns_members_rate = calculate_local_asns_members_rate(
+                country_stats["member_asns"],
+                list(country_stats["routed_asns"] or []),
+            )
+            local_routed_asns_members_customers_rate = (
+                calculate_local_asns_members_rate(
+                    country_stats["member_and_customer_asns"],
+                    list(country_stats["routed_asns"] or []),
+                )
+            )
+            StatsPerCountryES.objects.update_or_create(
+                country_code=code,
+                stats_date=stats_date.date(),
+                defaults={
+                    "ixp_count": country_stats["ixp_count"],
+                    "routed_asn_count": len(country_stats["routed_asns"] or []),
+                    "member_count": len(country_stats["member_asns"]),
+                    "domestic_network_membership": local_routed_asns_members_rate,
+                    "domestic_network_coverage": local_routed_asns_members_customers_rate,
+                    "total_capacity": (country_stats["total_capacity"] / 1000),
                     "last_generated": date_now,
                 },
             )

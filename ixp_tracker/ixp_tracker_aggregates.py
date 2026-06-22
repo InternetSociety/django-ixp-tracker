@@ -428,3 +428,7 @@ def stringify_date(date_value: datetime) -> str:
     if date_value.tzinfo is None:
         date_value = date_value.replace(tzinfo=timezone.utc)
     return date_value.strftime(DATE_FORMAT)
+
+
+def is_ixp_active(active_members: list) -> bool:
+    return len(active_members) >= 3

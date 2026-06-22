@@ -255,36 +255,6 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     )
 
 
-class StatsPerIXPESFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = legacy.StatsPerIXPES
-
-    ixp = None
-    stats_date = factory.Faker(
-        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    capacity = factory.Faker("random_number", digits=5)
-    members = factory.Faker("random_number", digits=3)
-    domestic_network_membership = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    domestic_network_coverage = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    rs_peering_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    members_joined_last_12_months = factory.Faker("random_number", digits=2)
-    members_left_last_12_months = factory.Faker("random_number", digits=2)
-    monthly_members_change = factory.Faker("random_number", digits=2)
-    monthly_members_change_percent = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    last_generated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
 class MockLookup(AdditionalDataSources):
     def __init__(
         self,
@@ -350,6 +320,59 @@ class StatsPerCountryFactory(factory.django.DjangoModelFactory):
 
 
 # Fixtures for event sourcing
+
+
+class StatsPerIXPESFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = legacy.StatsPerIXPES
+
+    ixp = None
+    stats_date = factory.Faker(
+        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
+    capacity = factory.Faker("random_number", digits=5)
+    members = factory.Faker("random_number", digits=3)
+    domestic_network_membership = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    domestic_network_coverage = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    rs_peering_rate = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    members_joined_last_12_months = factory.Faker("random_number", digits=2)
+    members_left_last_12_months = factory.Faker("random_number", digits=2)
+    monthly_members_change = factory.Faker("random_number", digits=2)
+    monthly_members_change_percent = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    last_generated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
+
+
+class StatsPerCountryESFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = legacy.StatsPerCountryES
+
+    country_code = factory.Faker("country_code")
+    stats_date = factory.Faker(
+        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
+    )
+    ixp_count = factory.Faker("random_int", max=200)
+    routed_asn_count = factory.Faker("random_int", max=800)
+    member_count = factory.Faker("random_int", max=500)
+    domestic_network_membership = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    domestic_network_coverage = factory.Faker(
+        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
+    )
+    total_capacity = factory.Faker("random_number", digits=5)
+    last_generated = factory.Faker(
+        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
+    )
 
 
 class StoredEventFactory(factory.django.DjangoModelFactory):
@@ -486,6 +509,7 @@ def create_ixp(
     es: EventStore,
     active_status=False,
     created_date: datetime | None = None,
+    country_code: str | None = None,
 ) -> IXP:
     city = faker.city()
     name = f"{city} - IX"
@@ -499,7 +523,7 @@ def create_ixp(
         peeringdb_id,
         faker.url(schemes=["https"]),
         False,
-        faker.country_code(),
+        country_code or faker.country_code(),
         stringify_date(
             created_date
             or faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)

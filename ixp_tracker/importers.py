@@ -28,6 +28,7 @@ from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
+    is_ixp_active,
 )
 from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 
@@ -575,7 +576,3 @@ def toggle_ixp_active_status(
                     "Toggle IXP active status", extra={"ixp": ixp.peeringdb_id}
                 )
     return
-
-
-def is_ixp_active(active_members: list) -> bool:
-    return len(active_members) >= 3

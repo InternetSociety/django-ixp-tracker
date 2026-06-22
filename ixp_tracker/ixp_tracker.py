@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from typing import TypedDict, Any
 from uuid import uuid4, UUID
 
+from ixp_tracker.ixp_tracker_aggregates import is_ixp_active
+
 from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.event_store import (
     EventStore,
@@ -248,11 +250,11 @@ class IXPTracker:
                 member_left[0], ixpt.stringify_date(member_left[1])
             )
             ixp = self.es.store(ixp, left_event)
-        members = ixp.get_members()
-        if ixp.active_status is False and len(members) >= 3:
+        member_asns = list(ixp.get_members().keys())
+        if ixp.active_status is False and is_ixp_active(member_asns):
             active_event = ixpt.IXPBecameActive()
             ixp = self.es.store(ixp, active_event)
-        elif ixp.active_status is True and len(members) < 3:
+        elif ixp.active_status is True and not is_ixp_active(member_asns):
             inactive_event = ixpt.IXPBecameInactive()
             ixp = self.es.store(ixp, inactive_event)
         return ixp

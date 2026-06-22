@@ -44,9 +44,21 @@ def test_generates_capacity_rs_peering_and_member_count(faker: Faker):
     app, es = build_app(MemoryEventStore())
     ixp = create_ixp(faker, es, created_date=created_date)
     asn_one = create_asn(faker, es)
-    create_member(faker, es, ixp, asn_one, {"port_speed": 500, "is_rs_peer": True})
+    create_member(
+        faker,
+        es,
+        ixp,
+        asn_one,
+        {"port_speed": 500, "is_rs_peer": True, "start_date": created_date},
+    )
     asn_two = create_asn(faker, es)
-    create_member(faker, es, ixp, asn_two, {"port_speed": 10000, "is_rs_peer": False})
+    create_member(
+        faker,
+        es,
+        ixp,
+        asn_two,
+        {"port_speed": 10000, "is_rs_peer": False, "start_date": created_date},
+    )
 
     do_generate_stats(MockLookup(), es_app=app)
 
@@ -75,7 +87,13 @@ def test_does_not_count_members_marked_as_left(faker: Faker):
     app, es = build_app(MemoryEventStore())
     ixp = create_ixp(faker, es, created_date=created_date)
     asn_one = create_asn(faker, es)
-    create_member(faker, es, ixp, asn_one, {"port_speed": 500, "is_rs_peer": True})
+    create_member(
+        faker,
+        es,
+        ixp,
+        asn_one,
+        {"port_speed": 500, "is_rs_peer": True, "start_date": created_date},
+    )
     asn_two = create_asn(faker, es)
     create_member(
         faker,
@@ -85,6 +103,7 @@ def test_does_not_count_members_marked_as_left(faker: Faker):
         {
             "port_speed": 10000,
             "is_rs_peer": False,
+            "start_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc),
             "end_date": datetime(year=2024, month=4, day=1, tzinfo=timezone.utc),
         },
     )
@@ -128,6 +147,7 @@ def test_does_not_count_members_not_yet_created(faker: Faker):
     ixp = create_ixp(faker, es, created_date=stats_date)
     asn = create_asn(faker, es)
     date_joined = stats_date + timedelta(weeks=1)
+    create_member(faker, es, ixp, asn, {"start_date": stats_date})
     create_member(faker, es, ixp, asn, {"start_date": date_joined})
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
@@ -155,9 +175,9 @@ def test_saves_domestic_network_membership_rate(faker: Faker):
     ixp = create_ixp(faker, es, created_date=created_date)
     # IXP has 2 members, one "local" and one not
     local_asn = create_asn(faker, es)
-    create_member(faker, es, ixp, local_asn)
+    create_member(faker, es, ixp, local_asn, {"start_date": created_date})
     non_local_asn = create_asn(faker, es)
-    create_member(faker, es, ixp, non_local_asn)
+    create_member(faker, es, ixp, non_local_asn, {"start_date": created_date})
 
     # There are 4 "local" ASNs including our local IXP member
     local_asns = [
@@ -275,9 +295,9 @@ def test_saves_local_routed_asns_members_and_customers_rate(faker: Faker):
     app, es = build_app(MemoryEventStore())
     ixp = create_ixp(faker, es, created_date=created_date)
     local_asn = create_asn(faker, es)
-    create_member(faker, es, ixp, local_asn)
-    create_member(faker, es, ixp, create_asn(faker, es))
-    create_member(faker, es, ixp, create_asn(faker, es))
+    create_member(faker, es, ixp, local_asn, {"start_date": created_date})
+    create_member(faker, es, ixp, create_asn(faker, es), {"start_date": created_date})
+    create_member(faker, es, ixp, create_asn(faker, es), {"start_date": created_date})
     customer_asn = ASNFactory().number
 
     local_asns = [
