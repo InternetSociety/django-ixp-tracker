@@ -1,9 +1,11 @@
 from dataclasses import dataclass
-from datetime import timezone, datetime
+from datetime import timezone, datetime, timedelta
 
 import pytest
 
 from uuid import uuid4
+
+from faker import Faker
 
 from ixp_tracker.event_store import (
     DjangoEventStore,
@@ -205,3 +207,29 @@ def test_time_machine_saves_event_in_the_past(faker):
 
     stored_event = des.get_events().pop()
     assert stored_event.event_date == time_in_past
+
+
+def test_retrieves_past_state_of_aggregate(faker: Faker):
+    des = DjangoEventStore()
+    es = EventStore(TEST_EVENT_MAP, des)
+    time_in_past = faker.date_time_between(
+        start_date="-2w", end_date="-1w", tzinfo=timezone.utc
+    )
+
+    # Create an aggregate in the past using time travel
+    es.time_travel(time_in_past)
+    aggregate = TestAggregate(id=uuid4())
+    create_event = CreatedTestAggregate(foo="bar")
+    es.store(aggregate, create_event)
+
+    # Update the aggregate in real time
+    es.time_travel(None)
+    update_event = TestAggregateUpdated(foo="baz")
+    es.store(aggregate, update_event)
+
+    time_before_update = datetime.now(timezone.utc) - timedelta(days=1)
+    aggregate_in_past = es.get_aggregate(
+        aggregate.id, TestAggregate, time_before_update
+    )
+
+    assert aggregate_in_past.foo == "bar"

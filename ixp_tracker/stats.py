@@ -31,7 +31,8 @@ class CountryStats(TypedDict):
 
 
 def generate_stats(lookup: AdditionalDataSources, stats_date: datetime | None = None):
-    es_app = build_app(lookup)
+    stats_date = stats_date or datetime.now(timezone.utc)
+    es_app = build_app(lookup, stats_date)
     do_generate_stats(lookup, stats_date, es_app)
 
 
@@ -262,13 +263,12 @@ def do_generate_stats(
                 },
             )
     else:
-        ixps = es_app.get_all_ixps()
+        # Ensure we load the state of all IXPs as they were on the stats date
+        ixps = es_app.get_all_ixps(stats_date)
         for ixp in ixps:
             # We always save the stats per IXP after their created date so we can track stats across time (e.g. if an IXP becomes inactive then active again)
-            if ixp.date_created > stats_date:
-                continue
             isoc_id = es_app.find_isoc_id(ixp.id)
-            members = ixp.get_members(as_at=stats_date)
+            members = ixp.get_members()
             member_asns = list(members.keys())
             member_count = len(member_asns)
             total_capacity = sum([m.port_speed for m in members.values()])
@@ -320,8 +320,7 @@ def do_generate_stats(
                     "IXP has possible invalid country",
                     extra={"ixp": isoc_id, "country": ixp.country_code},
                 )
-            # ixp.active_status only gives us the current active state, we need the historical state so we check the member list directly
-            if is_ixp_active(member_asns):
+            if ixp.active_status:
                 all_stats_per_country[ixp.country_code]["ixp_count"] += 1
                 all_stats_per_country[ixp.country_code]["member_asns"] |= set(
                     member_asns

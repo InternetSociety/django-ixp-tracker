@@ -42,9 +42,14 @@ def import_data(
     processing_date: datetime | None = None,
     page_limit: int = 200,
 ):
-    es_app = build_app(additional_data)
     if processing_date is None:
+        backfill = False
         processing_date = datetime.now(timezone.utc)
+    else:
+        backfill = True
+        processing_date = processing_date.replace(day=1)
+    es_app = build_app(additional_data, processing_date)
+    if not backfill:
         import_ixps(processing_date, additional_data, es_app)
         logger.debug("Imported IXPs")
         import_asns(processing_date, additional_data, reset, page_limit, es_app)
@@ -54,9 +59,6 @@ def import_data(
         toggle_ixp_active_status(processing_date, es_app)
         logger.debug("Toggled IXPs active status")
     else:
-        processing_date = processing_date.replace(day=1)
-        if es_app:
-            es_app.time_travel(processing_date)
         processing_month = processing_date.month
         found = False
         backfill_raw = None
@@ -167,13 +169,16 @@ def import_ixps(
     )
 
 
-def build_app(geo_lookup: ASNGeoLookup) -> IXPTracker | None:
+def build_app(geo_lookup: ASNGeoLookup, processing_date: datetime) -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
         return None
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
     app = IXPTracker(es, geo_lookup)
+    # We always set the time travel so the monthly stats can run safely for the first of each month,
+    # and we set the time elements to zero to ensure we always get all events for that date
+    app.time_travel(processing_date.replace(hour=0, minute=0, second=0, microsecond=0))
     return app
 
 

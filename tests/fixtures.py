@@ -463,19 +463,28 @@ class MemoryEventStore(EventStorePersistence):
         self.events.append(event)
 
     def get_aggregate_events(
-        self, aggregate_id: UUID, aggregate_type: type[T], sequence: int | None
+        self,
+        aggregate_id: UUID,
+        aggregate_type: type[T],
+        sequence: int | None,
+        as_at: datetime | None = None,
     ) -> list[StoredEvent]:
         events = [e for e in self.events if e.aggregate_id == aggregate_id]
-        if sequence is None:
-            return events
-        return [e for e in events if e.event_sequence > sequence]
+        if sequence is not None:
+            events = [e for e in events if e.event_sequence > sequence]
+        if as_at is not None:
+            events = [e for e in events if e.event_date <= as_at]
+        return events
 
-    def get_all(self, aggregate_type: type[T]) -> list[UUID]:
+    def get_all(
+        self, aggregate_type: type[T], as_at: datetime | None = None
+    ) -> list[UUID]:
         aggregates = set(
             [
                 e.aggregate_id
                 for e in self.events
                 if e.aggregate_type == aggregate_type.__name__
+                and (as_at is None or e.event_date <= as_at)
             ]
         )
         return list(aggregates)
@@ -488,7 +497,9 @@ class MemoryEventStore(EventStorePersistence):
     ):
         self.snapshots[aggregate_id] = (json.dumps(data), sequence, date_now)
 
-    def load_snapshot(self, aggregate_id: UUID) -> tuple[dict, int] | tuple[None, None]:
+    def load_snapshot(
+        self, aggregate_id: UUID, as_at: datetime | None = None
+    ) -> tuple[dict, int] | tuple[None, None]:
         snapshot = self.snapshots.get(aggregate_id, None)
         if snapshot is None:
             return None, None

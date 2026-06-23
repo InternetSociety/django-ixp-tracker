@@ -273,8 +273,8 @@ class IXPTracker:
         except IXPIdMap.DoesNotExist:
             return None
 
-    def get_all_ixps(self):
-        return self.es.get_all(ixpt.IXP)
+    def get_all_ixps(self, as_at: datetime | None = None):
+        return self.es.get_all(ixpt.IXP, as_at)
 
     def get_all_asns(self):
         return self.es.get_all(ixpt.ASN)

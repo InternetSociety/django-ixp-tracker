@@ -29,7 +29,8 @@ from tests.fixtures import (
 
 pytestmark = pytest.mark.django_db
 # Ensure default created date is before 1st of current month so it's counted in the stats
-created_date = datetime.now(timezone.utc).replace(day=1) - timedelta(days=7)
+start_of_current_month = datetime.now(timezone.utc).replace(day=1)
+created_date = start_of_current_month - timedelta(days=7)
 
 
 def test_with_no_data_generates_no_stats():
@@ -42,6 +43,7 @@ def test_with_no_data_generates_no_stats():
 
 def test_generates_capacity_rs_peering_and_member_count(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(start_of_current_month)
     ixp = create_ixp(faker, es, created_date=created_date)
     asn_one = create_asn(faker, es)
     create_member(
@@ -72,9 +74,10 @@ def test_generates_capacity_rs_peering_and_member_count(faker: Faker):
 
 def test_generates_stats_for_first_of_month(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    stats_date = datetime.now(timezone.utc).replace(day=10)
+    es.time_travel(stats_date.replace(day=1))
     create_ixp(faker, es, created_date=created_date)
 
-    stats_date = datetime.now(timezone.utc).replace(day=10)
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
     stats = StatsPerIXPES.objects.all()
@@ -85,6 +88,7 @@ def test_generates_stats_for_first_of_month(faker: Faker):
 
 def test_does_not_count_members_marked_as_left(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(start_of_current_month)
     ixp = create_ixp(faker, es, created_date=created_date)
     asn_one = create_asn(faker, es)
     create_member(
@@ -118,6 +122,7 @@ def test_does_not_count_members_marked_as_left(faker: Faker):
 
 def test_does_not_count_member_twice_if_they_rejoin(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(start_of_current_month)
     ixp = create_ixp(faker, es, created_date=created_date)
     asn = create_asn(faker, es)
     date_left = datetime(year=2024, month=4, day=1, tzinfo=timezone.utc)
@@ -144,6 +149,7 @@ def test_does_not_count_member_twice_if_they_rejoin(faker: Faker):
 def test_does_not_count_members_not_yet_created(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
+    es.time_travel(stats_date)
     ixp = create_ixp(faker, es, created_date=stats_date)
     asn = create_asn(faker, es)
     date_joined = stats_date + timedelta(weeks=1)
@@ -159,10 +165,11 @@ def test_does_not_count_members_not_yet_created(faker: Faker):
 def test_does_not_count_ixps_not_yet_created(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
-    created_date = stats_date + timedelta(weeks=1)
-    ixp = create_ixp(faker, es, created_date=created_date)
+    ixp_created_date = stats_date + timedelta(weeks=1)
+    es.time_travel(created_date)
+    ixp = create_ixp(faker, es, created_date=ixp_created_date)
     asn = create_asn(faker, es)
-    create_member(faker, es, ixp, asn, {"start_date": created_date})
+    create_member(faker, es, ixp, asn, {"start_date": ixp_created_date})
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
@@ -172,6 +179,7 @@ def test_does_not_count_ixps_not_yet_created(faker: Faker):
 
 def test_saves_domestic_network_membership_rate(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(start_of_current_month)
     ixp = create_ixp(faker, es, created_date=created_date)
     # IXP has 2 members, one "local" and one not
     local_asn = create_asn(faker, es)
@@ -195,6 +203,7 @@ def test_saves_domestic_network_membership_rate(faker: Faker):
 def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
+    es.time_travel(stats_date)
     ixp = create_ixp(faker, es, created_date=stats_date)
     # One member joined more than 12 months ago and is still a member (i.e. not counted in either)
     create_member(
@@ -264,6 +273,7 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
 def test_adds_member_growth_stats(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
+    es.time_travel(stats_date)
     ixp = create_ixp(faker, es, created_date=stats_date)
     # Has 5 current members
     # 4 joined in the past
@@ -293,6 +303,7 @@ def test_adds_member_growth_stats(faker: Faker):
 
 def test_saves_local_routed_asns_members_and_customers_rate(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(start_of_current_month)
     ixp = create_ixp(faker, es, created_date=created_date)
     local_asn = create_asn(faker, es)
     create_member(faker, es, ixp, local_asn, {"start_date": created_date})
@@ -319,6 +330,7 @@ def test_updates_existing_stats(faker: Faker):
     date_now = datetime.now(timezone.utc)
     # Ensure stats_date and last_generated are always in the past so we can verify the updated last_generated
     stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
+    es.time_travel(stats_date)
     last_generated = stats_date + timedelta(days=1)
     ixp = create_ixp(faker, es, created_date=stats_date)
     create_member(faker, es, ixp, create_asn(faker, es), {"start_date": stats_date})

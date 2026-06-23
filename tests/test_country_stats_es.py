@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from factory import Faker
+from faker import Faker
 
 from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 
@@ -40,6 +40,7 @@ def test_with_no_data_generates_no_stats():
 
 def test_generates_stats(faker: Faker):
     app, es = build_app(MemoryEventStore())
+    es.time_travel(created_date)
     ixp_one = create_ixp(faker, es, created_date=created_date, active_status=True)
     create_member(
         faker, es, ixp_one, create_asn(faker, es), {"start_date": created_date}
@@ -98,47 +99,15 @@ def test_generates_ixp_counts(faker: Faker):
     stats_date = datetime.now(timezone.utc)
     one_month_before = (stats_date - timedelta(days=1)).replace(day=1)
     one_month_after = (stats_date + timedelta(days=35)).replace(day=1)
-    # active_status only stores the current status whereas the stats need to generate historically
-    # so the stats use the historical member count rather than active_status
-    # currently_active with three members
-    active = create_ixp(faker, es, created_date=created_date, active_status=True)
-    create_member(
-        faker,
-        es,
-        active,
-        create_asn(faker, es),
-        {
-            "start_date": one_month_before,
-            "end_date": one_month_after,
-        },
-    )
-    create_member(
-        faker,
-        es,
-        active,
-        create_asn(faker, es),
-        {
-            "start_date": one_month_before,
-            "end_date": one_month_after,
-        },
-    )
-    create_member(
-        faker,
-        es,
-        active,
-        create_asn(faker, es),
-        {
-            "start_date": one_month_before,
-            "end_date": one_month_after,
-        },
-    )
+    country_code = faker.country_code()
     # member active in the past
+    es.time_travel(one_month_before)
     member_in_past = create_ixp(
         faker,
         es,
-        created_date=created_date,
-        active_status=True,
-        country_code=active.country_code,
+        created_date=one_month_before,
+        active_status=False,
+        country_code=country_code,
     )
     create_member(
         faker,
@@ -150,28 +119,49 @@ def test_generates_ixp_counts(faker: Faker):
             "end_date": one_month_before,
         },
     )
-    # member not yet active (as we are generating historical stats there could be members in the future)
-    member_in_future = create_ixp(
+    # IXP with three currently active members
+    es.time_travel(created_date)
+    active = create_ixp(
         faker,
         es,
         created_date=created_date,
         active_status=True,
-        country_code=active.country_code,
+        country_code=country_code,
     )
     create_member(
         faker,
         es,
-        member_in_future,
+        active,
         create_asn(faker, es),
-        {"start_date": one_month_after},
+        {
+            "start_date": one_month_before,
+        },
+    )
+    create_member(
+        faker,
+        es,
+        active,
+        create_asn(faker, es),
+        {
+            "start_date": one_month_before,
+        },
+    )
+    create_member(
+        faker,
+        es,
+        active,
+        create_asn(faker, es),
+        {
+            "start_date": one_month_before,
+        },
     )
     # currently_active but only two members
     not_enough_members = create_ixp(
         faker,
         es,
         created_date=created_date,
-        active_status=True,
-        country_code=active.country_code,
+        active_status=False,
+        country_code=country_code,
     )
     create_member(
         faker,
@@ -180,9 +170,39 @@ def test_generates_ixp_counts(faker: Faker):
         create_asn(faker, es),
         {
             "start_date": one_month_before,
-            "end_date": one_month_after,
         },
     )
+    # IXP created but members not yet active (as we are generating historical stats there could be members in the future)
+    member_in_future = create_ixp(
+        faker,
+        es,
+        created_date=created_date,
+        active_status=False,
+        country_code=country_code,
+    )
+    es.time_travel(one_month_after)
+    create_member(
+        faker,
+        es,
+        member_in_future,
+        create_asn(faker, es),
+        {"start_date": one_month_after},
+    )
+    create_member(
+        faker,
+        es,
+        member_in_future,
+        create_asn(faker, es),
+        {"start_date": one_month_after},
+    )
+    create_member(
+        faker,
+        es,
+        member_in_future,
+        create_asn(faker, es),
+        {"start_date": one_month_after},
+    )
+
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
     stats = StatsPerCountryES.objects.filter(country_code=active.country_code).first()
