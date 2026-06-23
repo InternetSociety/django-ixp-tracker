@@ -1,7 +1,7 @@
 import ast
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from glob import glob
 from json.decoder import JSONDecodeError
 from typing import Callable, Any
@@ -30,7 +30,12 @@ from ixp_tracker.ixp_tracker_aggregates import (
     PeeringPolicy,
     is_ixp_active,
 )
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
+from ixp_tracker.ixp_tracker_projections import (
+    ASNList,
+    IXPIdMapProjection,
+    IXPsLastUpdatedProjection,
+)
+from ixp_tracker.updated_ixp_records import IXPRecord
 
 logger = logging.getLogger("ixp_tracker")
 PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -175,6 +180,7 @@ def build_app(geo_lookup: ASNGeoLookup, processing_date: datetime) -> IXPTracker
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
+    es.add_listener(IXPsLastUpdatedProjection())
     app = IXPTracker(es, geo_lookup)
     # We always set the time travel so the monthly stats can run safely for the first of each month,
     # and we set the time elements to zero to ensure we always get all events for that date
@@ -581,3 +587,16 @@ def toggle_ixp_active_status(
                     "Toggle IXP active status", extra={"ixp": ixp.peeringdb_id}
                 )
     return
+
+
+def fetch_updated_ixp_records(
+    lookup: AdditionalDataSources,
+    since_date: date | None = None,
+    count: int = 200,
+    first_id: int = 0,
+) -> list[IXPRecord]:
+    app = build_app(lookup, datetime.now(timezone.utc))
+    if app is None:
+        logger.warning("Event Sourcing must be enabled to use this function")
+        return []
+    return app.fetch_updated_ixp_records(since_date, count, first_id)

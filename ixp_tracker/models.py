@@ -322,3 +322,28 @@ class AggregateSnapshot(models.Model):
                 name="ixp_tracker_snapshot_aggregate_sequence",
             )
         ]
+
+
+class UpdatedIXPs(models.Model):
+    aggregate_id = models.UUIDField()
+    last_updated = (
+        models.DateField()
+    )  # We only need the date here as that simplifies querying.
+    isoc_id = models.IntegerField()
+    data = models.JSONField()
+
+    def __str__(self):
+        return (
+            f"IXP {self.aggregate_id} ({self.isoc_id}) last updated {self.last_updated}"
+        )
+
+    class Meta:
+        verbose_name = "Last updated IXPs"
+        ordering = ["isoc_id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["aggregate_id"],
+                name="ixp_tracker_last_updated_ixps",
+            )
+        ]

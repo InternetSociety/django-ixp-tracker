@@ -1,6 +1,20 @@
+from datetime import date
+
 from ixp_tracker.event_store import Projection, Aggregate
-from ixp_tracker.ixp_tracker_aggregates import IXPCreated, ASNCreated, ASN, IXP
-from ixp_tracker.models import StoredEvent, ASNMap, IXPIdMap, IXP as LegacyIXP
+from ixp_tracker.ixp_tracker_aggregates import (
+    IXPCreated,
+    ASNCreated,
+    ASN,
+    IXP,
+    IXP_TRACKER_EVENT_MAP,
+)
+from ixp_tracker.models import (
+    StoredEvent,
+    ASNMap,
+    IXPIdMap,
+    IXP as LegacyIXP,
+    UpdatedIXPs,
+)
 
 
 class ASNList(Projection):
@@ -48,3 +62,39 @@ class IXPIdMapProjection(Projection):
             return IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
         except IXPIdMap.DoesNotExist:
             return None
+
+
+class IXPsLastUpdatedProjection(Projection):
+    aggregate_types = [IXP.__name__]
+
+    def __init__(self):
+        self.events = []
+        # We need to make sure we handle *all* IXP events so this feels like the most reliable way to do that
+        for event_type in IXP_TRACKER_EVENT_MAP.keys():
+            if not event_type.startswith("ASN"):
+                self.events.append(event_type)
+        super().__init__()
+        self.id_map = IXPIdMapProjection()
+
+    def do_handle(self, event: StoredEvent, ixp: Aggregate):
+        if not isinstance(ixp, IXP):
+            return
+        ids = self.id_map.find_by_peeringdb_id(ixp.peeringdb_id)
+        if ids is None:
+            return
+        UpdatedIXPs.objects.update_or_create(
+            aggregate_id=ixp.id,
+            isoc_id=ids.id,
+            defaults={
+                "last_updated": event.event_date.date(),
+                "data": ixp.snapshot(),
+            },
+        )
+
+    def ixps_updated_since(
+        self, since: date | None, count: int, first_id: int
+    ) -> list[UpdatedIXPs]:
+        updated = UpdatedIXPs.objects.filter(isoc_id__gte=first_id)
+        if since:
+            updated = updated.filter(last_updated__gte=since)
+        return list(updated.all()[:count])

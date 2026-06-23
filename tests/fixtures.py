@@ -47,6 +47,7 @@ from ixp_tracker.models import (
 
 class MemberProperties(TypedDict):
     last_active: NotRequired[datetime]
+    last_updated: NotRequired[datetime]
 
 
 class MembershipProperties(TypedDict):
@@ -515,19 +516,17 @@ def build_app() -> IXPTracker:
     return app
 
 
-def create_ixp(
+def create_ixp_event(
     faker: Faker,
-    es: EventStore,
-    active_status=False,
     created_date: datetime | None = None,
     country_code: str | None = None,
-) -> IXP:
+    peeringdb_id: int | None = None,
+):
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
-    peeringdb_id = faker.random_number(digits=3)
-    ixp = IXP(id=uuid4())
-    event = IXPCreated(
+    peeringdb_id = peeringdb_id or faker.random_number(digits=3)
+    return IXPCreated(
         name,
         long_name,
         city,
@@ -546,6 +545,18 @@ def create_ixp(
         faker.random_number(digits=3),
         faker.random_number(digits=2),
     )
+
+
+def create_ixp(
+    faker: Faker,
+    es: EventStore,
+    active_status=False,
+    created_date: datetime | None = None,
+    country_code: str | None = None,
+    peeringdb_id: int | None = None,
+) -> IXP:
+    ixp = IXP(id=uuid4())
+    event = create_ixp_event(faker, created_date, country_code, peeringdb_id)
     ixp = es.store(ixp, event)
     if active_status:
         ixp = es.store(ixp, IXPBecameActive())

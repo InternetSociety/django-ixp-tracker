@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import TypedDict, Any
 from uuid import uuid4, UUID
 
@@ -11,7 +11,9 @@ from ixp_tracker.event_store import (
     AggregateNotFound,
 )
 import ixp_tracker.ixp_tracker_aggregates as ixpt
+from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection
 from ixp_tracker.models import IXPIdMap, ASNMap
+from ixp_tracker.updated_ixp_records import IXPRecord, IXPMemberRecord
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -288,6 +290,63 @@ class IXPTracker:
 
     def time_travel(self, date_in_past: datetime):
         self.es.time_travel(date_in_past)
+
+    def fetch_updated_ixp_records(
+        self,
+        since_date: date | None = None,
+        count: int = 200,
+        first_id: int = 0,
+    ) -> list[IXPRecord]:
+        projection = IXPsLastUpdatedProjection()
+        updated_ixps = projection.ixps_updated_since(since_date, count, first_id)
+        ixp_records: list[IXPRecord] = []
+        logger.debug("Fetching IXPs")
+        for ixp_data in updated_ixps:
+            ixp = ixpt.IXP(ixp_data.aggregate_id)
+            ixp.hydrate(ixp_data.data)
+            member_records: list[IXPMemberRecord] = []
+            members = ixp.get_members()
+            for member_asn in members.keys():
+                member = members[member_asn]
+                asn = self.get_asn(member_asn)
+                if asn:
+                    member_records.append(
+                        {
+                            "member_since": member.date_joined,
+                            "speed": member.port_speed,
+                            "is_rs_peer": member.is_rs_peer,
+                            "asn": {
+                                "holder_name": asn.name,
+                                "asn": asn.number,
+                                "network_type": asn.network_type.value,
+                                "registration_country": asn.country_code,
+                                "peering_policy": asn.peering_policy.value,
+                            },
+                        }
+                    )
+                else:
+                    logger.warning(
+                        "ASN not found", extra={"asn": member_asn, "ixp": ixp.id}
+                    )
+            current: IXPRecord = {
+                "id": ixp_data.isoc_id,
+                "name": ixp.name,
+                "long_name": ixp.long_name,
+                "country": ixp.country_code,
+                "city": ixp.city,
+                "website": ixp.website,
+                "last_updated": ixp.last_updated.date()
+                if ixp.last_updated is not None
+                else None,
+                "members": member_records,
+                "peering_id": ixp.peeringdb_id,
+                "active": ixp.active_status,
+                "manrs_participant": ixp.manrs_participant,
+                "anchor_host": ixp.anchor_host,
+                "physical_locations": ixp.physical_locations or 0,
+            }
+            ixp_records.append(current)
+        return ixp_records
 
 
 def check_if_members_have_left(
