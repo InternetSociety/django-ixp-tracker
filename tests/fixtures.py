@@ -35,7 +35,11 @@ from ixp_tracker.ixp_tracker_aggregates import (
     PeeringPolicy,
     stringify_date,
 )
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
+from ixp_tracker.ixp_tracker_projections import (
+    ASNList,
+    IXPIdMapProjection,
+    IXPsLastUpdatedProjection,
+)
 import ixp_tracker.models as legacy
 from ixp_tracker.models import (
     StatsPerCountry,
@@ -259,23 +263,29 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
 class MockLookup(AdditionalDataSources):
     def __init__(
         self,
-        asns: list[int] = [],
-        routed_asns: list[int] = [],
-        customer_asns: list[int] = [],
-        manrs_participants: list[int] = [],
-        anchor_hosts: list[int] = [],
+        asns: list[int] | None = None,
+        routed_asns: list[int] | None = None,
+        customer_asns: list[int] | None = None,
+        manrs_participants: list[int] | None = None,
+        anchor_hosts: list[int] | None = None,
+        default_country: str = "US",
+        default_status: str = "assigned",
     ):
-        self.asns = asns
-        self.routed_asns = routed_asns
-        self.customer_asns = customer_asns
-        self.manrs_participants = manrs_participants
-        self.anchor_hosts = anchor_hosts
+        self.asns = asns or []
+        self.routed_asns = routed_asns or []
+        self.customer_asns = customer_asns or []
+        self.manrs_participants = manrs_participants or []
+        self.anchor_hosts = anchor_hosts or []
+        self.default_country = default_country
+        self.default_status = default_status
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        return ""
+        return self.default_country
 
     def get_status(self, asn: int, as_at: datetime) -> str:
-        return ""
+        assert as_at <= datetime.now(timezone.utc)
+        assert asn > 0
+        return self.default_status
 
     def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
         return self.asns
@@ -508,12 +518,16 @@ class MemoryEventStore(EventStorePersistence):
         return json.loads(snapshot[0]), snapshot[1]
 
 
-def build_app() -> IXPTracker:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
-    es.add_listener(ASNList())
+def build_app(
+    es_db: EventStorePersistence | None = None,
+    lookup: AdditionalDataSources | None = None,
+) -> tuple[IXPTracker, EventStore]:
+    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es, TestLookup())
-    return app
+    es.add_listener(ASNList())
+    es.add_listener(IXPsLastUpdatedProjection())
+    app = IXPTracker(es, lookup or MockLookup())
+    return app, es
 
 
 def create_ixp_event(
@@ -618,42 +632,3 @@ def create_member(
         )
         ixp = es.store(ixp, left_event)
     return ixp
-
-
-class TestLookup(AdditionalDataSources):
-    __test__ = False
-
-    def __init__(
-        self,
-        default_status: str = "assigned",
-        default_country: str = "US",
-        routed_asns: list[int] | None = None,
-        customer_asns: list[int] | None = None,
-    ):
-        self.default_status = default_status
-        self.default_country = default_country
-        self.routed_asns = routed_asns or []
-        self.customer_asns = customer_asns or []
-
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        return self.default_country
-
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.now(timezone.utc)
-        assert asn > 0
-        return self.default_status
-
-    def get_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
-        return []
-
-    def get_routed_asns_for_country(self, country: str, as_at: datetime) -> list[int]:
-        return self.routed_asns
-
-    def get_customer_asns(self, asns: list[int], as_at: datetime) -> list[int]:
-        return self.customer_asns
-
-    def get_manrs_participants(self, as_at: datetime) -> list[int]:
-        return []
-
-    def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
-        return []

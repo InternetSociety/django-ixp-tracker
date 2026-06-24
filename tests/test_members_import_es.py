@@ -3,18 +3,15 @@ from datetime import datetime, timezone
 import pytest
 
 from ixp_tracker import importers
-from ixp_tracker.event_store import EventStorePersistence, EventStore, DjangoEventStore
-from ixp_tracker.ixp_tracker import (
-    IXPTracker,
-)
-from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP, IXP
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
+from ixp_tracker.event_store import DjangoEventStore
+from ixp_tracker.ixp_tracker_aggregates import IXP
 from tests.fixtures import (
     PeeringNetIXLANFactory,
-    TestLookup,
+    MockLookup,
     create_ixp,
     create_asn,
     create_member,
+    build_app,
 )
 
 pytestmark = pytest.mark.django_db
@@ -34,7 +31,7 @@ def test_adds_new_members(faker):
         asn=asn_two.number, ix_id=ixp.peeringdb_id
     )
 
-    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor = importers.process_member_data(date_now, MockLookup(), app)
     processor([member_import_one, member_import_two])
 
     ixp = es.get_aggregate(ixp.id, IXP)
@@ -51,7 +48,7 @@ def test_does_nothing_if_no_asn_found(faker):
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
     fixture_events = len(des.get_events())
 
-    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor = importers.process_member_data(date_now, MockLookup(), app)
     processor([member_import])
 
     assert len(des.get_events()) == fixture_events
@@ -65,7 +62,7 @@ def test_does_nothing_if_no_ixp_found(faker):
     fixture_events = len(des.get_events())
 
     app, _ = build_app()
-    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor = importers.process_member_data(date_now, MockLookup(), app)
     processor([member_import])
 
     assert len(des.get_events()) == fixture_events
@@ -81,7 +78,7 @@ def test_updates_member(faker):
     )
     last_active = ixp.get_members().get(asn.number).last_active
 
-    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor = importers.process_member_data(date_now, MockLookup(), app)
     processor([member_import])
 
     ixp = es.get_aggregate(ixp.id, IXP)
@@ -106,7 +103,7 @@ def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
         )
     assert ixp.active_status is True
 
-    processor = importers.process_member_data(date_now, TestLookup(), app)
+    processor = importers.process_member_data(date_now, MockLookup(), app)
     processor([])
 
     ixp = es.get_aggregate(ixp.id, IXP)
@@ -115,13 +112,3 @@ def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
     all_members = ixp.get_members(True)
     assert len(all_members) == 3
     assert ixp.active_status is False
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(IXPIdMapProjection())
-    es.add_listener(ASNList())
-    app = IXPTracker(es, TestLookup())
-    return app, es

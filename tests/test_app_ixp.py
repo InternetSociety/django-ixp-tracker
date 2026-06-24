@@ -3,17 +3,7 @@ from datetime import timezone
 import pytest
 from faker.proxy import Faker
 
-from ixp_tracker.event_store import (
-    DjangoEventStore,
-    EventStore,
-    EventStorePersistence,
-)
-from ixp_tracker.ixp_tracker import (
-    IXPTracker,
-)
-from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
-from ixp_tracker.ixp_tracker_projections import IXPIdMapProjection
-from tests.fixtures import create_ixp, MemoryEventStore, TestLookup
+from tests.fixtures import create_ixp, MemoryEventStore, build_app
 
 pytestmark = pytest.mark.django_db
 
@@ -254,12 +244,3 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     assert event_created.event_type == "IXPCreated"
     assert last_active.event_type == "IXPActiveInPeeringDb"
     assert ixp.physical_locations == original_value
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es, TestLookup())
-    return app, es

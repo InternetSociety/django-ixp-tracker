@@ -3,13 +3,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from faker import Faker
 
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
-
-from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
-
-from ixp_tracker.ixp_tracker import IXPTracker
-
-from ixp_tracker.event_store import EventStorePersistence, EventStore, DjangoEventStore
 
 from ixp_tracker.models import StatsPerCountryES
 from ixp_tracker.stats import do_generate_stats
@@ -21,6 +14,7 @@ from tests.fixtures import (
     create_asn,
     create_member,
     StatsPerCountryESFactory,
+    build_app,
 )
 
 pytestmark = pytest.mark.django_db
@@ -243,13 +237,3 @@ def test_updates_existing_stats_entry():
     assert country_stats.ixp_count == 0
     assert country_stats.routed_asn_count == 0
     assert country_stats.member_count == 0
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(ASNList())
-    es.add_listener(IXPIdMapProjection())
-    app = IXPTracker(es, MockLookup())
-    return app, es

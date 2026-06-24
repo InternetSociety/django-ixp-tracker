@@ -3,23 +3,13 @@ from statistics import median
 
 import pytest
 from faker import Faker
-from ixp_tracker.ixp_tracker_projections import (
-    ASNList,
-    IXPIdMapProjection,
-    IXPsLastUpdatedProjection,
-)
 
-from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
-
-from ixp_tracker.ixp_tracker import IXPTracker
-
-from ixp_tracker.event_store import EventStorePersistence, EventStore, DjangoEventStore
 
 from tests.fixtures import (
     create_ixp,
-    TestLookup,
     create_member,
     create_asn,
+    build_app,
 )
 
 pytestmark = pytest.mark.django_db
@@ -168,14 +158,3 @@ def test_with_offset_after_last_id_returns_nothing(faker: Faker):
     records = app.fetch_updated_ixp_records(None, first_id=(last_id + 1))
 
     assert len(records) == 0
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(IXPIdMapProjection())
-    es.add_listener(ASNList())
-    es.add_listener(IXPsLastUpdatedProjection())
-    app = IXPTracker(es, TestLookup())
-    return app, es

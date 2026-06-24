@@ -10,14 +10,14 @@ IXP_TRACKER_ENABLE_EVENT_SOURCING = True
 
 
 def test_with_no_data_does_nothing():
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)([])
 
     assert len(app.get_all_ixps()) == 0
 
 
 def test_imports_a_new_ixp():
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
         [PeeringIXFactory()]
     )
@@ -29,7 +29,7 @@ def test_imports_a_new_ixp():
 def test_import_handles_missing_data():
     new_data = PeeringIXFactory()
     del new_data["fac_count"]
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
         [new_data]
     )
@@ -40,7 +40,7 @@ def test_import_handles_missing_data():
 
 def test_updates_an_existing_ixp(faker):
     new_data = PeeringIXFactory()
-    app = build_app()
+    app, _ = build_app()
     city = faker.city()
     name = f"{city} - IX"
     long_name = f"{city} Internet Exchange Point"
@@ -74,7 +74,7 @@ def test_updates_an_existing_ixp(faker):
 def test_does_not_import_an_ixp_from_a_non_iso_country():
     new_data = PeeringIXFactory()
     new_data["country"] = "XK"  # XK is Kosovo, but it's not an official ISO code
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
         [new_data]
     )
@@ -87,7 +87,7 @@ def test_handles_errors_with_source_data():
     data_with_problems = PeeringIXFactory()
     data_with_problems["created"] = "abc"
 
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(datetime.now(timezone.utc), MockLookup(), app)(
         [data_with_problems]
     )
@@ -99,7 +99,7 @@ def test_handles_errors_with_source_data():
 def test_saves_manrs_participant():
     new_data = PeeringIXFactory()
     manrs_participants = [new_data["id"]]
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(
         datetime.now(timezone.utc),
         MockLookup(manrs_participants=manrs_participants),
@@ -113,7 +113,7 @@ def test_saves_manrs_participant():
 def test_saves_anchor_host():
     new_data = PeeringIXFactory()
     anchor_hosts = [new_data["id"]]
-    app = build_app()
+    app, _ = build_app()
     importers.process_ixp_data(
         datetime.now(timezone.utc),
         MockLookup(anchor_hosts=anchor_hosts),

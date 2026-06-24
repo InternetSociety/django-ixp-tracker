@@ -1,21 +1,11 @@
 import pytest
 from faker.proxy import Faker
 
-from ixp_tracker.event_store import (
-    DjangoEventStore,
-    EventStore,
-    EventStorePersistence,
-)
-from ixp_tracker.ixp_tracker import (
-    IXPTracker,
-)
 from ixp_tracker.ixp_tracker_aggregates import (
-    IXP_TRACKER_EVENT_MAP,
     NetworkType,
     PeeringPolicy,
 )
-from ixp_tracker.ixp_tracker_projections import ASNList
-from tests.fixtures import create_asn, MemoryEventStore, TestLookup
+from tests.fixtures import create_asn, MemoryEventStore, build_app
 
 pytestmark = pytest.mark.django_db
 
@@ -123,12 +113,3 @@ def test_records_peeringdb_id_change_as_separate_event(faker):
     [_event_created, update_event] = mes.events
 
     assert update_event.event_type == "ASNPeeringDbIdChanged"
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(ASNList())
-    app = IXPTracker(es, TestLookup())
-    return app, es

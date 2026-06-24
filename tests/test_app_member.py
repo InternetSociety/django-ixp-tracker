@@ -2,24 +2,16 @@ from datetime import datetime, timezone
 import pytest
 from faker import Faker
 
-from ixp_tracker.data_lookup import ASNGeoLookup
-from ixp_tracker.event_store import (
-    EventStorePersistence,
-    EventStore,
-    DjangoEventStore,
-)
 from ixp_tracker.ixp_tracker import (
-    IXPTracker,
     MemberImportData,
 )
-from ixp_tracker.ixp_tracker_aggregates import IXP_TRACKER_EVENT_MAP
-from ixp_tracker.ixp_tracker_projections import ASNList, IXPIdMapProjection
 from tests.fixtures import (
     create_ixp,
     create_asn,
     MemoryEventStore,
     create_member,
-    TestLookup,
+    MockLookup,
+    build_app,
 )
 
 pytestmark = pytest.mark.django_db
@@ -216,7 +208,7 @@ def test_marks_ixp_inactive_if_members_drops_below_three(
 def test_member_marked_left_due_to_zz_country_registration_is_not_imported(faker):
     mes = MemoryEventStore()
     app, es = build_app(
-        mes, TestLookup(default_country="ZZ", default_status="reserved")
+        mes, MockLookup(default_country="ZZ", default_status="reserved")
     )
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
@@ -243,7 +235,7 @@ def test_as112_is_marked_as_rejoined(faker):
     # But we want AS112 to be considered in this case as it probably means it has left and rejoined
     mes = MemoryEventStore()
     app, es = build_app(
-        mes, TestLookup(default_country="ZZ", default_status="reserved")
+        mes, MockLookup(default_country="ZZ", default_status="reserved")
     )
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es, asn=112)
@@ -257,17 +249,6 @@ def test_as112_is_marked_as_rejoined(faker):
 
     updated_member = ixp.get_members(True)[asn.number]
     assert updated_member.date_left is None
-
-
-def build_app(
-    es_db: EventStorePersistence | None = None,
-    geo_lookup: ASNGeoLookup | None = None,
-) -> tuple[IXPTracker, EventStore]:
-    es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
-    es.add_listener(IXPIdMapProjection())
-    es.add_listener(ASNList())
-    app = IXPTracker(es, geo_lookup or TestLookup(default_country="US"))
-    return app, es
 
 
 def create_member_import_data(
