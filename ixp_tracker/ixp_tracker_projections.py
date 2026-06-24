@@ -7,6 +7,8 @@ from ixp_tracker.ixp_tracker_aggregates import (
     ASN,
     IXP,
     IXP_TRACKER_EVENT_MAP,
+    IXPMemberActiveInPeeringDb,
+    IXPActiveInPeeringDb,
 )
 from ixp_tracker.models import (
     StoredEvent,
@@ -69,10 +71,17 @@ class IXPsLastUpdatedProjection(Projection):
 
     def __init__(self):
         self.events = []
-        # We need to make sure we handle *all* IXP events so this feels like the most reliable way to do that
+        # We need to make sure we handle any IXP events that make changes so this feels like the most reliable way to do that
         for event_type in IXP_TRACKER_EVENT_MAP.keys():
-            if not event_type.startswith("ASN"):
-                self.events.append(event_type)
+            if event_type.startswith("ASN"):
+                continue
+            # We don't need the "last_active" events though as they don't materially change the aggregates
+            if event_type in [
+                IXPActiveInPeeringDb.__name__,
+                IXPMemberActiveInPeeringDb.__name__,
+            ]:
+                continue
+            self.events.append(event_type)
         super().__init__()
         self.id_map = IXPIdMapProjection()
 
