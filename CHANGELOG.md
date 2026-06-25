@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2rc1
 - experimental event-sourced version
 - optionally load archived data from local rather than from CAIDA
 
