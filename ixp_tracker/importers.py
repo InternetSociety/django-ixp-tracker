@@ -46,6 +46,7 @@ def import_data(
     reset: bool = False,
     processing_date: datetime | None = None,
     page_limit: int = 200,
+    disable_event_sourcing: bool = False,
 ):
     if processing_date is None:
         backfill = False
@@ -53,7 +54,7 @@ def import_data(
     else:
         backfill = True
         processing_date = processing_date.replace(day=1)
-    es_app = build_app(additional_data, processing_date)
+    es_app = build_app(additional_data, processing_date, disable_event_sourcing)
     if not backfill:
         import_ixps(processing_date, additional_data, es_app)
         logger.debug("Imported IXPs")
@@ -174,8 +175,12 @@ def import_ixps(
     )
 
 
-def build_app(geo_lookup: ASNGeoLookup, processing_date: datetime) -> IXPTracker | None:
-    if not IXP_TRACKER_ENABLE_EVENT_SOURCING:
+def build_app(
+    geo_lookup: ASNGeoLookup,
+    processing_date: datetime,
+    disable_event_sourcing: bool = False,
+) -> IXPTracker | None:
+    if not IXP_TRACKER_ENABLE_EVENT_SOURCING or disable_event_sourcing:
         return None
     es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
     es.add_listener(IXPIdMapProjection())

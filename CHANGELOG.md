@@ -1,5 +1,9 @@
 # Changelog
 
+## 2rc2
+- rename stats models so new ES versions are the primary models
+- reverse ES feature flag so ES implementation is the default
+
 ## 2rc1
 - experimental event-sourced version
 - optionally load archived data from local rather than from CAIDA

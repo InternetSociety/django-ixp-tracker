@@ -2,14 +2,14 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ixp_tracker.models import StatsPerIXP
+from ixp_tracker.models import StatsPerIXPLegacy
 from ixp_tracker.stats import generate_stats
 from tests.fixtures import (
     ASNFactory,
     IXPFactory,
     IXPMembershipRecordFactory,
     MockLookup,
-    StatsPerIXPFactory,
+    StatsPerIXPLegacyFactory,
     create_member_fixture,
 )
 
@@ -17,9 +17,9 @@ pytestmark = pytest.mark.django_db
 
 
 def test_with_no_data_generates_no_stats():
-    generate_stats(MockLookup())
+    generate_stats(MockLookup(), disable_event_sourcing=True)
 
-    stats = StatsPerIXP.objects.all()
+    stats = StatsPerIXPLegacy.objects.all()
     assert len(stats) == 0
 
 
@@ -30,9 +30,9 @@ def test_generates_capacity_rs_peering_and_member_count():
         ixp, membership_properties={"speed": 10000, "is_rs_peer": False}
     )
 
-    generate_stats(MockLookup())
+    generate_stats(MockLookup(), disable_event_sourcing=True)
 
-    stats = StatsPerIXP.objects.all()
+    stats = StatsPerIXPLegacy.objects.all()
     assert len(stats) == 1
     ixp_stats = stats.first()
     assert ixp_stats.members == 2
@@ -44,9 +44,9 @@ def test_generates_stats_for_first_of_month():
     IXPFactory()
 
     stats_date = datetime.now(timezone.utc).replace(day=10)
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    stats = StatsPerIXP.objects.all()
+    stats = StatsPerIXPLegacy.objects.all()
     assert len(stats) == 1
     ixp_stats = stats.first()
     assert ixp_stats.stats_date == stats_date.replace(day=1).date()
@@ -66,9 +66,9 @@ def test_does_not_count_members_marked_as_left():
         },
     )
 
-    generate_stats(MockLookup())
+    generate_stats(MockLookup(), disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.members == 1
     assert ixp_stats.capacity == 0.5
     assert ixp_stats.rs_peering_rate == 0
@@ -84,9 +84,9 @@ def test_does_not_count_member_twice_if_they_rejoin():
     )
     IXPMembershipRecordFactory(member=member)
 
-    generate_stats(MockLookup())
+    generate_stats(MockLookup(), disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.members == 1
 
 
@@ -100,9 +100,9 @@ def test_does_not_count_members_not_yet_created():
         ixp, membership_properties={"start_date": datetime(year=2024, month=4, day=1)}
     )
 
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.members == 1
 
 
@@ -111,9 +111,9 @@ def test_does_not_count_ixps_not_yet_created():
     ixp = IXPFactory(created=(stats_date + timedelta(days=60)))
     create_member_fixture(ixp, quantity=2)
 
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats is None
 
 
@@ -128,9 +128,9 @@ def test_saves_local_asns_members_rate():
         ASNFactory().number,
         ASNFactory().number,
     ]
-    generate_stats(MockLookup(asns=local_asns))
+    generate_stats(MockLookup(asns=local_asns), disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.local_asns_members_rate == 0.25
 
 
@@ -145,9 +145,9 @@ def test_saves_local_routed_asns_members_rate():
         ASNFactory().number,
         ASNFactory().number,
     ]
-    generate_stats(MockLookup(routed_asns=local_asns))
+    generate_stats(MockLookup(routed_asns=local_asns), disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.local_routed_asns_members_rate == 0.25
 
 
@@ -185,9 +185,9 @@ def test_counts_net_joins_and_net_leaves_since_12_months():
         member=member, start_date=datetime(year=2023, month=11, day=1)
     )
 
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.members_joined_last_12_months == 2
     assert ixp_stats.members_left_last_12_months == 1
 
@@ -205,9 +205,11 @@ def test_adds_member_growth_stats():
         ixp, membership_properties={"start_date": datetime(year=2025, month=2, day=2)}
     )
 
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    new_ixp_stats = StatsPerIXP.objects.filter(stats_date=stats_date.date()).first()
+    new_ixp_stats = StatsPerIXPLegacy.objects.filter(
+        stats_date=stats_date.date()
+    ).first()
     assert new_ixp_stats.monthly_members_change == 1
     assert new_ixp_stats.monthly_members_change_percent == 0.25
 
@@ -224,9 +226,12 @@ def test_saves_local_routed_asns_members_and_customers_rate():
         ASNFactory().number,
         ASNFactory().number,
     ]
-    generate_stats(MockLookup(routed_asns=local_asns, customer_asns=[customer_asn]))
+    generate_stats(
+        MockLookup(routed_asns=local_asns, customer_asns=[customer_asn]),
+        disable_event_sourcing=True,
+    )
 
-    ixp_stats = StatsPerIXP.objects.all().first()
+    ixp_stats = StatsPerIXPLegacy.objects.all().first()
     assert ixp_stats.local_routed_asns_members_customers_rate == 0.5
 
 
@@ -239,13 +244,13 @@ def test_updates_existing_stats():
     create_member_fixture(
         ixp_one, quantity=2, membership_properties={"start_date": stats_date}
     )
-    existing = StatsPerIXPFactory(
+    existing = StatsPerIXPLegacyFactory(
         stats_date=stats_date, ixp=ixp_one, members=1, last_generated=last_generated
     )
 
-    generate_stats(MockLookup(), stats_date)
+    generate_stats(MockLookup(), stats_date, disable_event_sourcing=True)
 
-    all_stats_for_ixp = StatsPerIXP.objects.filter(ixp=ixp_one)
+    all_stats_for_ixp = StatsPerIXPLegacy.objects.filter(ixp=ixp_one)
     assert all_stats_for_ixp.count() == 1
     ixp_stats = all_stats_for_ixp.first()
     assert ixp_stats.last_generated > existing.last_generated

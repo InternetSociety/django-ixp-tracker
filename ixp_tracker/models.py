@@ -121,7 +121,7 @@ class IXPMembershipRecord(models.Model):
         verbose_name_plural = "IXP Membership records"
 
 
-class StatsPerIXP(models.Model):
+class StatsPerIXPLegacy(models.Model):
     ixp = models.ForeignKey(IXP, on_delete=models.CASCADE)
     stats_date = models.DateField()
     capacity = models.FloatField()
@@ -149,7 +149,7 @@ class StatsPerIXP(models.Model):
         ]
 
 
-class StatsPerCountry(models.Model):
+class StatsPerCountryLegacy(models.Model):
     country_code = models.CharField(max_length=2)
     stats_date = models.DateField()
     ixp_count = models.IntegerField()
@@ -179,7 +179,7 @@ class StatsPerCountry(models.Model):
 # Models for event sourcing
 
 
-class StatsPerIXPES(models.Model):
+class StatsPerIXP(models.Model):
     ixp = models.IntegerField()  # The ISOC id
     stats_date = models.DateField()
     capacity = models.FloatField()
@@ -207,7 +207,7 @@ class StatsPerIXPES(models.Model):
         ]
 
 
-class StatsPerCountryES(models.Model):
+class StatsPerCountry(models.Model):
     country_code = models.CharField(max_length=2)
     stats_date = models.DateField()
     ixp_count = models.IntegerField()

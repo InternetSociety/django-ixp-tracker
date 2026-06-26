@@ -4,7 +4,7 @@ import pytest
 from faker import Faker
 
 
-from ixp_tracker.models import StatsPerCountryES
+from ixp_tracker.models import StatsPerCountry
 from ixp_tracker.stats import do_generate_stats
 from tests.fixtures import (
     ASNFactory,
@@ -13,7 +13,7 @@ from tests.fixtures import (
     create_ixp,
     create_asn,
     create_member,
-    StatsPerCountryESFactory,
+    StatsPerCountryFactory,
     build_app,
 )
 
@@ -26,7 +26,7 @@ def test_with_no_data_generates_no_stats():
     app, es = build_app(MemoryEventStore())
     do_generate_stats(MockLookup(), es_app=app)
 
-    stats = StatsPerCountryES.objects.all()
+    stats = StatsPerCountry.objects.all()
     assert len(stats) == 249
     first_stat = stats.first()
     assert first_stat.member_count == 0
@@ -80,7 +80,7 @@ def test_generates_stats(faker: Faker):
         es_app=app,
     )
 
-    stats = StatsPerCountryES.objects.filter(country_code=ixp_one.country_code).first()
+    stats = StatsPerCountry.objects.filter(country_code=ixp_one.country_code).first()
     assert stats.ixp_count == 2
     assert stats.routed_asn_count == 4
     assert stats.member_count == 4
@@ -199,7 +199,7 @@ def test_generates_ixp_counts(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    stats = StatsPerCountryES.objects.filter(country_code=active.country_code).first()
+    stats = StatsPerCountry.objects.filter(country_code=active.country_code).first()
     assert stats.ixp_count == 1
     assert stats.member_count == 3
 
@@ -212,7 +212,7 @@ def test_handles_invalid_country(faker: Faker):
 
     do_generate_stats(MockLookup(), es_app=app)
 
-    country_stats = StatsPerCountryES.objects.filter(country_code="XK").first()
+    country_stats = StatsPerCountry.objects.filter(country_code="XK").first()
     assert country_stats is None
 
 
@@ -222,13 +222,13 @@ def test_updates_existing_stats_entry():
     # Ensure stats_date and last_generated are always in the past so we can verify the updated last_generated
     stats_date = (date_now.replace(day=1) - timedelta(days=1)).replace(day=1)
     last_generated = stats_date + timedelta(days=1)
-    existing = StatsPerCountryESFactory(
+    existing = StatsPerCountryFactory(
         stats_date=stats_date, last_generated=last_generated
     )
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    all_stats_for_country = StatsPerCountryES.objects.filter(
+    all_stats_for_country = StatsPerCountry.objects.filter(
         country_code=existing.country_code
     )
     assert all_stats_for_country.count() == 1

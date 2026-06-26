@@ -42,8 +42,8 @@ from ixp_tracker.ixp_tracker_projections import (
 )
 import ixp_tracker.models as legacy
 from ixp_tracker.models import (
-    StatsPerCountry,
-    StatsPerIXP,
+    StatsPerCountryLegacy,
+    StatsPerIXPLegacy,
     StoredEvent,
     IXPIdMap,
 )
@@ -227,9 +227,9 @@ class PeeringNetIXLANFactory(factory.DictFactory):
         )
 
 
-class StatsPerIXPFactory(factory.django.DjangoModelFactory):
+class StatsPerIXPLegacyFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = StatsPerIXP
+        model = StatsPerIXPLegacy
 
     ixp = None
     stats_date = factory.Faker(
@@ -303,9 +303,9 @@ class MockLookup(AdditionalDataSources):
         return self.anchor_hosts
 
 
-class StatsPerCountryFactory(factory.django.DjangoModelFactory):
+class StatsPerCountryLegacyFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = StatsPerCountry
+        model = StatsPerCountryLegacy
 
     country_code = factory.Faker("country_code")
     stats_date = factory.Faker(
@@ -333,9 +333,9 @@ class StatsPerCountryFactory(factory.django.DjangoModelFactory):
 # Fixtures for event sourcing
 
 
-class StatsPerIXPESFactory(factory.django.DjangoModelFactory):
+class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = legacy.StatsPerIXPES
+        model = legacy.StatsPerIXP
 
     ixp = None
     stats_date = factory.Faker(
@@ -363,9 +363,9 @@ class StatsPerIXPESFactory(factory.django.DjangoModelFactory):
     )
 
 
-class StatsPerCountryESFactory(factory.django.DjangoModelFactory):
+class StatsPerCountryFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = legacy.StatsPerCountryES
+        model = legacy.StatsPerCountry
 
     country_code = factory.Faker("country_code")
     stats_date = factory.Faker(

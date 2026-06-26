@@ -28,7 +28,7 @@ except (TypeError, ValueError):
 try:
     IXP_TRACKER_ENABLE_EVENT_SOURCING = bool(settings.IXP_TRACKER_ENABLE_EVENT_SOURCING)
 except AttributeError:
-    IXP_TRACKER_ENABLE_EVENT_SOURCING = False
+    IXP_TRACKER_ENABLE_EVENT_SOURCING = True
 except (TypeError, ValueError):
     raise ImproperlyConfigured("IXP_TRACKER_ENABLE_EVENT_SOURCING must be a boolean")
 

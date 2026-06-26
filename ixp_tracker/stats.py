@@ -13,10 +13,10 @@ from ixp_tracker.ixp_tracker_aggregates import is_ixp_active
 from ixp_tracker.models import (
     IXP,
     IXPMembershipRecord,
-    StatsPerCountry,
+    StatsPerCountryLegacy,
+    StatsPerIXPLegacy,
     StatsPerIXP,
-    StatsPerIXPES,
-    StatsPerCountryES,
+    StatsPerCountry,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -31,9 +31,13 @@ class CountryStats(TypedDict):
     total_capacity: int
 
 
-def generate_stats(lookup: AdditionalDataSources, stats_date: datetime | None = None):
+def generate_stats(
+    lookup: AdditionalDataSources,
+    stats_date: datetime | None = None,
+    disable_event_sourcing: bool = False,
+):
     stats_date = stats_date or datetime.now(timezone.utc)
-    es_app = build_app(lookup, stats_date)
+    es_app = build_app(lookup, stats_date, disable_event_sourcing)
     do_generate_stats(lookup, stats_date, es_app)
 
 
@@ -191,7 +195,7 @@ def do_generate_stats(
             rs_peering_rate = rs_peers_count / member_count if rs_peers_count else 0
             growth_members = member_count - num_members_last_month
             # We always save the stats per IXP so we can track stats across time (e.g. if an IXP becomes inactive then active again)
-            StatsPerIXP.objects.update_or_create(
+            StatsPerIXPLegacy.objects.update_or_create(
                 ixp=ixp,
                 stats_date=stats_date.date(),
                 defaults={
@@ -248,7 +252,7 @@ def do_generate_stats(
                     list(country_stats["routed_asns"] or []),
                 )
             )
-            StatsPerCountry.objects.update_or_create(
+            StatsPerCountryLegacy.objects.update_or_create(
                 country_code=code,
                 stats_date=stats_date.date(),
                 defaults={
@@ -296,7 +300,7 @@ def do_generate_stats(
             members_last_month = ixp.get_members(as_at=date_last_month)
             num_members_last_month = len(members_last_month.keys())
             growth_members = member_count - num_members_last_month
-            StatsPerIXPES.objects.update_or_create(
+            StatsPerIXP.objects.update_or_create(
                 ixp=isoc_id,
                 stats_date=stats_date.date(),
                 defaults={
@@ -352,7 +356,7 @@ def do_generate_stats(
                     list(country_stats["routed_asns"] or []),
                 )
             )
-            StatsPerCountryES.objects.update_or_create(
+            StatsPerCountry.objects.update_or_create(
                 country_code=code,
                 stats_date=stats_date.date(),
                 defaults={

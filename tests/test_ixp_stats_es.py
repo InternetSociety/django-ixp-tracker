@@ -10,7 +10,7 @@ from ixp_tracker.ixp_tracker_aggregates import (
 )
 
 
-from ixp_tracker.models import StatsPerIXPES
+from ixp_tracker.models import StatsPerIXP
 from ixp_tracker.stats import do_generate_stats
 from tests.fixtures import (
     ASNFactory,
@@ -19,7 +19,7 @@ from tests.fixtures import (
     create_ixp,
     create_asn,
     create_member,
-    StatsPerIXPESFactory,
+    StatsPerIXPFactory,
     build_app,
 )
 
@@ -33,7 +33,7 @@ def test_with_no_data_generates_no_stats():
     app, es = build_app(MemoryEventStore())
     do_generate_stats(MockLookup(), es_app=app)
 
-    stats = StatsPerIXPES.objects.all()
+    stats = StatsPerIXP.objects.all()
     assert len(stats) == 0
 
 
@@ -60,7 +60,7 @@ def test_generates_capacity_rs_peering_and_member_count(faker: Faker):
 
     do_generate_stats(MockLookup(), es_app=app)
 
-    stats = StatsPerIXPES.objects.all()
+    stats = StatsPerIXP.objects.all()
     assert len(stats) == 1
     ixp_stats = stats.first()
     assert ixp_stats.members == 2
@@ -76,7 +76,7 @@ def test_generates_stats_for_first_of_month(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    stats = StatsPerIXPES.objects.all()
+    stats = StatsPerIXP.objects.all()
     assert len(stats) == 1
     ixp_stats = stats.first()
     assert ixp_stats.stats_date == stats_date.replace(day=1).date()
@@ -110,7 +110,7 @@ def test_does_not_count_members_marked_as_left(faker: Faker):
 
     do_generate_stats(MockLookup(), es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
     assert ixp_stats.capacity == 0.5
     assert ixp_stats.rs_peering_rate == 1
@@ -138,7 +138,7 @@ def test_does_not_count_member_twice_if_they_rejoin(faker: Faker):
 
     do_generate_stats(MockLookup(), es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
 
 
@@ -154,7 +154,7 @@ def test_does_not_count_members_not_yet_created(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
 
 
@@ -169,7 +169,7 @@ def test_does_not_count_ixps_not_yet_created(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats is None
 
 
@@ -192,7 +192,7 @@ def test_saves_domestic_network_membership_rate(faker: Faker):
     ]
     do_generate_stats(MockLookup(routed_asns=local_asns), es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.domestic_network_membership == 0.25
 
 
@@ -261,7 +261,7 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members_joined_last_12_months == 2
     assert ixp_stats.members_left_last_12_months == 1
 
@@ -292,7 +292,7 @@ def test_adds_member_growth_stats(faker: Faker):
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    new_ixp_stats = StatsPerIXPES.objects.filter(stats_date=stats_date.date()).first()
+    new_ixp_stats = StatsPerIXP.objects.filter(stats_date=stats_date.date()).first()
     assert new_ixp_stats.monthly_members_change == 1
     assert new_ixp_stats.monthly_members_change_percent == 0.25
 
@@ -317,7 +317,7 @@ def test_saves_local_routed_asns_members_and_customers_rate(faker: Faker):
         MockLookup(routed_asns=local_asns, customer_asns=[customer_asn]), es_app=app
     )
 
-    ixp_stats = StatsPerIXPES.objects.all().first()
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.domestic_network_coverage == 0.5
 
 
@@ -332,13 +332,13 @@ def test_updates_existing_stats(faker: Faker):
     create_member(faker, es, ixp, create_asn(faker, es), {"start_date": stats_date})
     create_member(faker, es, ixp, create_asn(faker, es), {"start_date": stats_date})
     isoc_id = app.find_isoc_id(ixp.id)
-    existing = StatsPerIXPESFactory(
+    existing = StatsPerIXPFactory(
         stats_date=stats_date, ixp=isoc_id, members=1, last_generated=last_generated
     )
 
     do_generate_stats(MockLookup(), stats_date, es_app=app)
 
-    all_stats_for_ixp = StatsPerIXPES.objects.filter(ixp=isoc_id)
+    all_stats_for_ixp = StatsPerIXP.objects.filter(ixp=isoc_id)
     assert all_stats_for_ixp.count() == 1
     ixp_stats = all_stats_for_ixp.first()
     assert ixp_stats.last_generated > existing.last_generated
