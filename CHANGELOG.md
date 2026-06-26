@@ -1,5 +1,8 @@
 # Changelog
 
+## 2rc3
+- remove unneeded function and make it easier for clients to use the ES app directly
+
 ## 2rc2
 - rename stats models so new ES versions are the primary models
 - reverse ES feature flag so ES implementation is the default

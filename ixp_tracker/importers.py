@@ -1,7 +1,7 @@
 import ast
 import json
 import logging
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 from glob import glob
 from json.decoder import JSONDecodeError
 from typing import Callable, Any
@@ -35,7 +35,6 @@ from ixp_tracker.ixp_tracker_projections import (
     IXPIdMapProjection,
     IXPsLastUpdatedProjection,
 )
-from ixp_tracker.updated_ixp_records import IXPRecord
 
 logger = logging.getLogger("ixp_tracker")
 PEERING_DB_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -177,7 +176,7 @@ def import_ixps(
 
 def build_app(
     geo_lookup: ASNGeoLookup,
-    processing_date: datetime,
+    import_date: datetime | None = None,
     disable_event_sourcing: bool = False,
 ) -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING or disable_event_sourcing:
@@ -187,9 +186,10 @@ def build_app(
     es.add_listener(ASNList())
     es.add_listener(IXPsLastUpdatedProjection())
     app = IXPTracker(es, geo_lookup)
-    # We always set the time travel so the monthly stats can run safely for the first of each month,
-    # and we set the time elements to zero to ensure we always get all events for that date
-    app.time_travel(processing_date.replace(hour=0, minute=0, second=0, microsecond=0))
+    if import_date:
+        # We always set the time travel so the monthly stats can run safely for the first of each month,
+        # and we set the time elements to zero to ensure we always get all events for that date
+        app.time_travel(import_date.replace(hour=0, minute=0, second=0, microsecond=0))
     return app
 
 
@@ -592,16 +592,3 @@ def toggle_ixp_active_status(
                     "Toggle IXP active status", extra={"ixp": ixp.peeringdb_id}
                 )
     return
-
-
-def fetch_updated_ixp_records(
-    lookup: AdditionalDataSources,
-    since_date: date | None = None,
-    count: int = 200,
-    first_id: int = 0,
-) -> list[IXPRecord]:
-    app = build_app(lookup, datetime.now(timezone.utc))
-    if app is None:
-        logger.warning("Event Sourcing must be enabled to use this function")
-        return []
-    return app.fetch_updated_ixp_records(since_date, count, first_id)
