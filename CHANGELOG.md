@@ -1,5 +1,8 @@
 # Changelog
 
+## 2rc4
+- rename id to `isoc_id` when querying updated IXP records
+
 ## 2rc3
 - remove unneeded function and make it easier for clients to use the ES app directly
 

@@ -118,7 +118,7 @@ def test_with_offset_returns_records_with_that_id_or_greater(faker: Faker):
     records = app.fetch_updated_ixp_records(None, first_id=last_id)
 
     assert len(records) == 1
-    assert records[0]["id"] == last_id
+    assert records[0]["isoc_id"] == last_id
 
 
 def test_with_count_and_offset_returns_requested_slice_of_records(faker: Faker):
@@ -138,7 +138,7 @@ def test_with_count_and_offset_returns_requested_slice_of_records(faker: Faker):
     records = app.fetch_updated_ixp_records(None, 1, middle_id)
 
     assert len(records) == 1
-    assert records[0]["id"] == middle_id
+    assert records[0]["isoc_id"] == middle_id
 
 
 def test_with_offset_after_last_id_returns_nothing(faker: Faker):

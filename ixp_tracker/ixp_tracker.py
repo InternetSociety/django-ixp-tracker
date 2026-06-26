@@ -329,7 +329,7 @@ class IXPTracker:
                         "ASN not found", extra={"asn": member_asn, "ixp": ixp.id}
                     )
             current: IXPRecord = {
-                "id": ixp_data.isoc_id,
+                "isoc_id": ixp_data.isoc_id,
                 "name": ixp.name,
                 "long_name": ixp.long_name,
                 "country": ixp.country_code,

@@ -18,7 +18,7 @@ class IXPMemberRecord(TypedDict):
 
 
 class IXPRecord(TypedDict):
-    id: int
+    isoc_id: int
     name: str
     long_name: str
     country: str
