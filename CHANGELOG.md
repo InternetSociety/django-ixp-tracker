@@ -6,6 +6,9 @@
 - fixes issue where we were using an out-of-date AS registration country from NRO stats to mark defunct ASes as having left an IX
 - fixes issue where AS112 was being marked as having left an IX (due to AS112 being registered to country ZZ)
 
+## 2rc5
+- flip how legacy `isoc_id` ids are preserved
+
 ## 2rc4
 - rename id to `isoc_id` when querying updated IXP records
 

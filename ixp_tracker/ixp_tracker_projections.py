@@ -14,7 +14,6 @@ from ixp_tracker.models import (
     StoredEvent,
     ASNMap,
     IXPIdMap,
-    IXP as LegacyIXP,
     UpdatedIXPs,
 )
 
@@ -44,14 +43,10 @@ class IXPIdMapProjection(Projection):
         if existing.count() > 0:
             return
         peeringdb_id = event.data.get("peeringdb_id", None)
-        preserve_legacy_id = LegacyIXP.objects.filter(peeringdb_id=peeringdb_id).first()
-        if preserve_legacy_id:
-            # If a legacy object exists, use that's primary key as our primary key to preserve the "isoc_id"
-            isoc_id = IXPIdMap(
-                id=preserve_legacy_id.pk,
-                aggregate_id=event.aggregate_id,
-                peeringdb_id=peeringdb_id,
-            )
+        isoc_id = IXPIdMap.objects.filter(peeringdb_id=peeringdb_id).first()
+        if isoc_id:
+            # If an object exists, use that as it will have been pre-populated with the correct "isoc_id"
+            isoc_id.aggregate_id = event.aggregate_id
         else:
             isoc_id = IXPIdMap(
                 aggregate_id=event.aggregate_id,

@@ -11,6 +11,17 @@ Library to retrieve and manipulate data about IXPs
 
 Note the v2 is a complete rewrite to use [Event Sourcing](docs/event-sourcing-rewrite.md). The first time you upgrade you will need to re-run any historical data you have as the history is not migrated between major versions.
 
+v2 does not by default preserve any internal ids for IXPs. If you need to preserve them, you will need to preload the `IXPIdMap` model table with the mapping to Peering DB ids (use a dummy `aggregate_id`), e.g. if you use Postgres, by running these queries
+```sql
+INSERT INTO ixp_tracker_ixpidmap (id, peeringdb_id, aggregate_id)
+SELECT id, peeringdb_id, concat('aaaabbbb-cccc-dddd-eeee-', lpad(id::text, 12, '0'))::uuid FROM ixp_tracker_ixp;
+
+SELECT setval(pg_get_serial_sequence('ixp_tracker_ixpidmap', 'id')
+           , COALESCE(max(id) + 1, 1)
+           , false)
+FROM   ixp_tracker_ixpidmap;
+```
+
 The legacy implementation is preserved in v2 for now but will be removed in a future minor version. If you would like to upgrade to v2 but continue with the legacy implementation be sure to set `IXP_TRACKER_ENABLE_EVENT_SOURCING` to `False`. Note that there are no changes to the legacy implementation in v2 though.
 
 ## Installation

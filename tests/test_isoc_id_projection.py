@@ -1,9 +1,11 @@
+from uuid import UUID
+
 import pytest
 
 from ixp_tracker.ixp_tracker_aggregates import IXP
 from ixp_tracker.ixp_tracker_projections import IXPIdMapProjection
 from ixp_tracker.models import IXPIdMap
-from tests.fixtures import StoredEventFactory, IXPIdMapFactory, IXPFactory
+from tests.fixtures import StoredEventFactory, IXPIdMapFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -78,14 +80,14 @@ def test_returns_id_if_peeringdb_id_is_found(faker):
     assert id_map.aggregate_id is not None
 
 
-def test_uses_existing_isoc_id_when_importing_an_ixp_for_the_first_time(faker):
-    # Add a couple of id maps to ensure that we don't just automatically get id#1 for both entities
-    IXPIdMapFactory()
-    IXPIdMapFactory()
-    IXPIdMapFactory()
-    projection = IXPIdMapProjection()
+def test_links_aggregate_to_existing_isoc_id_when_importing_an_ixp_for_the_first_time(
+    faker,
+):
     peeringdb_id = faker.random_number(digits=3)
-    legacy_ixp = IXPFactory(peeringdb_id=peeringdb_id)
+    IXPIdMapFactory()
+    IXPIdMapFactory()
+    IXPIdMapFactory(peeringdb_id=peeringdb_id)
+    projection = IXPIdMapProjection()
     event = StoredEventFactory(
         event_type="IXPCreated",
         aggregate_type="IXP",
@@ -95,6 +97,6 @@ def test_uses_existing_isoc_id_when_importing_an_ixp_for_the_first_time(faker):
 
     projection.handle(event, ixp)
 
-    saved = IXPIdMap.objects.get(aggregate_id=event.aggregate_id)
-    assert saved.peeringdb_id == peeringdb_id
-    assert saved.id == legacy_ixp.id
+    saved = IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
+    assert saved.aggregate_id == UUID(event.aggregate_id)
+    assert saved.id > 0
