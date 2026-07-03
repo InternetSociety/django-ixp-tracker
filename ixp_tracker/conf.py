@@ -17,14 +17,6 @@ except AttributeError:
 except (TypeError, ValueError):
     raise ImproperlyConfigured("IXP_TRACKER_PEERING_DB_URL must be a string value")
 
-IXP_TRACKER_PEERING_DB_KEY: str | None
-try:
-    IXP_TRACKER_PEERING_DB_KEY = str(settings.IXP_TRACKER_PEERING_DB_KEY)
-except AttributeError:
-    IXP_TRACKER_PEERING_DB_KEY = None
-except (TypeError, ValueError):
-    raise ImproperlyConfigured("IXP_TRACKER_PEERING_DB_KEY must be a string value")
-
 try:
     IXP_TRACKER_ENABLE_EVENT_SOURCING = bool(settings.IXP_TRACKER_ENABLE_EVENT_SOURCING)
 except AttributeError:

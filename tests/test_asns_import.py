@@ -1,11 +1,8 @@
-import json
 from datetime import datetime, timezone
 
 import pytest
-import responses
 
-from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
-from ixp_tracker import importers
+from ixp_tracker.importers import process_asn_data
 from ixp_tracker.models import ASN
 
 from .fixtures import ASNFactory, PeeringASNFactory
@@ -25,25 +22,14 @@ class TestLookup:
 
 
 def test_with_empty_response_does_nothing():
-    processor = importers.process_asn_data(processing_date, TestLookup())
-    processor([])
+    process_asn_data([], processing_date, TestLookup())
 
     asns = ASN.objects.all()
     assert len(asns) == 0
 
 
-def test_with_no_existing_data_gets_all_data():
-    with responses.RequestsMock() as rsps:
-        rsps.get(url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0", body="")
-        importers.import_asns(processing_date, TestLookup(), False)
-
-        asns = ASN.objects.all()
-        assert len(asns) == 0
-
-
 def test_imports_new_asn():
-    processor = importers.process_asn_data(processing_date, TestLookup())
-    processor([PeeringASNFactory()])
+    process_asn_data([PeeringASNFactory()], processing_date, TestLookup())
 
     asns = ASN.objects.all()
     assert len(asns) == 1
@@ -56,24 +42,14 @@ def test_updates_existing_data():
         peeringdb_id=updated_asn_data["id"],
         last_updated=datetime(2024, 5, 1, tzinfo=timezone.utc),
     )
-    with responses.RequestsMock() as rsps:
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL
-            + "/net?updated__gte=2024-05-01&limit=200&skip=0",
-            body=json.dumps({"data": [updated_asn_data]}),
-        )
-        rsps.get(
-            url=IXP_TRACKER_PEERING_DB_URL
-            + "/net?updated__gte=2024-05-01&limit=200&skip=200",
-            body=json.dumps({"data": []}),
-        )
-        importers.import_asns(processing_date, TestLookup(), False)
 
-        asns = ASN.objects.all()
-        assert len(asns) == 1
-        updated = asns.filter(peeringdb_id=updated_asn_data["id"]).first()
-        assert updated.name == updated_asn_data["name"]
-        assert updated.registration_country_code == "AU"
+    process_asn_data([updated_asn_data], processing_date, TestLookup(), None)
+
+    asns = ASN.objects.all()
+    assert len(asns) == 1
+    updated = asns.filter(peeringdb_id=updated_asn_data["id"]).first()
+    assert updated.name == updated_asn_data["name"]
+    assert updated.registration_country_code == "AU"
 
 
 def test_handles_errors_with_source_data():
@@ -81,8 +57,7 @@ def test_handles_errors_with_source_data():
     data_with_problems["updated"] = "abc"
     data_with_problems["asn"] = "foobar"
 
-    processor = importers.process_asn_data(processing_date, TestLookup())
-    processor([data_with_problems])
+    process_asn_data([data_with_problems], processing_date, TestLookup())
 
     asns = ASN.objects.all()
     assert len(asns) == 0

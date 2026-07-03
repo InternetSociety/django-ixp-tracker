@@ -43,7 +43,7 @@ pip install django-ixp-tracker
  Note: this app has no web-facing components so you don't need to add anything to `urls.py` etc
 
 2. Run `python manage.py migrate` to create the models.
-3. Add the relevant settings to your config. `IXP_TRACKER_PEERING_DB_URL` will use a default if you don't provide a value so you probably don't need that. But you will need to set `IXP_TRACKER_PEERING_DB_KEY` to authenticate against the API.
+3. Add the relevant settings to your config.
 4. Add `IXP_TRACKER_DATA_LOOKUP_FACTORY` to config with the path to your factory (see below).
 5. Run the management command to import the data: `python manage.py ixp_tracker_import` (This will sync the current data, if you want historical data you need to backfill first)
 

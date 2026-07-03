@@ -31,7 +31,7 @@ def test_with_no_data_returned_does_nothing():
                 {"ix": {"data": []}, "net": {"data": []}, "netixlan": {"data": []}}
             ),
         )
-        import_data(additional_data, False, backfill_date)
+        import_data(additional_data, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -54,7 +54,7 @@ def test_handles_malformed_archives():
             ),
             body=json.dumps({}),
         )
-        import_data(additional_data, False, backfill_date)
+        import_data(additional_data, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -77,7 +77,7 @@ def test_handles_single_quoted_json():
             ),
             body="{'ix': {'data': []}, 'net': {'data': []}, 'netixlan': {'data': []}}",
         )
-        import_data(additional_data, False, backfill_date)
+        import_data(additional_data, backfill_date)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -100,7 +100,7 @@ def test_queries_for_every_day_of_month():
             url=re.compile(data_url),
             status=404,
         )
-        import_data(additional_data, False, backfill_date, disable_event_sourcing=True)
+        import_data(additional_data, backfill_date, disable_event_sourcing=True)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 0
@@ -138,7 +138,7 @@ def test_adds_all_data():
             ),
         )
         # This test needs converting to test the output via ES
-        import_data(additional_data, False, backfill_date, disable_event_sourcing=True)
+        import_data(additional_data, backfill_date, disable_event_sourcing=True)
 
     ixps = IXP.objects.all()
     assert len(ixps) == 1

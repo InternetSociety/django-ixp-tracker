@@ -45,7 +45,7 @@ class IXPTracker:
         manrs_participant: bool,
         anchor_host: bool,
         org_id: int,
-        physical_locations: int,
+        physical_locations: int | None,
     ):
         exists = self.find_by_peeringdb_id(peeringdb_id)
         if exists:

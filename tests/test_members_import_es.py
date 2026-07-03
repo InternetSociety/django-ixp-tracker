@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from ixp_tracker import importers
 from ixp_tracker.event_store import DjangoEventStore
+from ixp_tracker.importers import process_member_data
 from ixp_tracker.ixp_tracker_aggregates import IXP
 from tests.fixtures import (
     PeeringNetIXLANFactory,
@@ -31,8 +31,9 @@ def test_adds_new_members(faker):
         asn=asn_two.number, ix_id=ixp.peeringdb_id
     )
 
-    processor = importers.process_member_data(date_now, MockLookup(), app)
-    processor([member_import_one, member_import_two])
+    process_member_data(
+        [member_import_one, member_import_two], date_now, MockLookup(), app
+    )
 
     ixp = es.get_aggregate(ixp.id, IXP)
     members = ixp.get_members()
@@ -48,8 +49,7 @@ def test_does_nothing_if_no_asn_found(faker):
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
     fixture_events = len(des.get_events())
 
-    processor = importers.process_member_data(date_now, MockLookup(), app)
-    processor([member_import])
+    process_member_data([member_import], date_now, MockLookup(), app)
 
     assert len(des.get_events()) == fixture_events
 
@@ -62,8 +62,7 @@ def test_does_nothing_if_no_ixp_found(faker):
     fixture_events = len(des.get_events())
 
     app, _ = build_app()
-    processor = importers.process_member_data(date_now, MockLookup(), app)
-    processor([member_import])
+    process_member_data([member_import], date_now, MockLookup(), app)
 
     assert len(des.get_events()) == fixture_events
 
@@ -78,8 +77,7 @@ def test_updates_member(faker):
     )
     last_active = ixp.get_members().get(asn.number).last_active
 
-    processor = importers.process_member_data(date_now, MockLookup(), app)
-    processor([member_import])
+    process_member_data([member_import], date_now, MockLookup(), app)
 
     ixp = es.get_aggregate(ixp.id, IXP)
     updated = ixp.get_members().get(asn.number)
@@ -103,8 +101,7 @@ def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
         )
     assert ixp.active_status is True
 
-    processor = importers.process_member_data(date_now, MockLookup(), app)
-    processor([])
+    process_member_data([], date_now, MockLookup(), app)
 
     ixp = es.get_aggregate(ixp.id, IXP)
     active_members = ixp.get_members()

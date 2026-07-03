@@ -2,8 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ixp_tracker import importers
-from ixp_tracker.importers import ASNGeoLookup
+from ixp_tracker.importers import ASNGeoLookup, process_member_data
 from ixp_tracker.models import IXPMember, IXPMembershipRecord
 from tests.fixtures import (
     ASNFactory,
@@ -24,7 +23,7 @@ class TestLookup(ASNGeoLookup):
         self.default_status = default_status
 
     def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        pass
+        return "US"
 
     def get_status(self, asn: int, as_at: datetime) -> str:
         assert as_at <= datetime.now(timezone.utc)
@@ -33,8 +32,7 @@ class TestLookup(ASNGeoLookup):
 
 
 def test_with_no_data_does_nothing():
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([])
+    process_member_data([], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 0
@@ -45,8 +43,7 @@ def test_adds_new_member():
     asn = ASNFactory()
     member_import = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 1
@@ -58,8 +55,7 @@ def test_does_nothing_if_no_asn_found():
     ixp = IXPFactory()
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 0
@@ -69,8 +65,7 @@ def test_does_nothing_if_no_ixp_found():
     asn = ASNFactory()
     member_import = PeeringNetIXLANFactory(asn=asn.number)
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 0
@@ -83,8 +78,7 @@ def test_updates_existing_member():
         asn=member.asn.number, ix_id=ixp.peeringdb_id
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 1
@@ -101,8 +95,7 @@ def test_updates_membership_for_existing_member():
         asn=member.asn.number, ix_id=ixp.peeringdb_id, speed=10000, is_rs_peer=True
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     membership = IXPMembershipRecord.objects.filter(member=member)
     assert len(membership) == 1
@@ -124,8 +117,7 @@ def test_adds_new_membership_for_existing_member_marked_as_left():
         asn=member.asn.number, ix_id=ixp.peeringdb_id
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     members = IXPMember.objects.all()
     assert len(members) == 1
@@ -151,8 +143,9 @@ def test_extends_membership_for_member_marked_as_left_if_created_before_date_lef
         created_date=datetime(year=2018, month=6, day=18, tzinfo=timezone.utc),
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_data_with_created_date_before_date_left])
+    process_member_data(
+        [member_data_with_created_date_before_date_left], date_now, TestLookup()
+    )
 
     members = IXPMember.objects.all()
     assert len(members) == 1
@@ -178,8 +171,7 @@ def test_marks_member_as_left_that_is_no_longer_active():
     current_membership = IXPMembershipRecord.objects.filter(member=member)
     assert current_membership.first().end_date is None
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([])
+    process_member_data([], date_now, TestLookup())
 
     current_membership = IXPMembershipRecord.objects.filter(member=member)
     assert current_membership.first().end_date.strftime(
@@ -194,10 +186,7 @@ def test_does_not_mark_member_as_left_if_asn_is_registered_in_country_zz_and_is_
         ixp, asn, member_properties={"last_active": datetime.now(timezone.utc)}
     )
 
-    processor = importers.process_member_data(
-        date_now, TestLookup(default_status="assigned")
-    )
-    processor([])
+    process_member_data([], date_now, TestLookup(default_status="assigned"))
 
     current_membership = IXPMembershipRecord.objects.filter(member=member)
     assert current_membership.first().end_date is None
@@ -213,8 +202,7 @@ def test_marks_member_as_left_if_asn_is_registered_in_country_zz_and_is_not_assi
         ixp, asn, member_properties={"last_active": datetime.now(timezone.utc)}
     )
 
-    processor = importers.process_member_data(date_now, TestLookup("available"))
-    processor([])
+    process_member_data([], date_now, TestLookup("available"))
 
     current_membership = IXPMembershipRecord.objects.filter(member=member)
     assert current_membership.first().end_date.strftime(
@@ -234,8 +222,7 @@ def test_does_not_mark_as_left_before_joining_date():
         membership_properties={"start_date": first_day_of_month},
     )
 
-    processor = importers.process_member_data(date_now, TestLookup("available"))
-    processor([])
+    process_member_data([], date_now, TestLookup("available"))
 
     current_membership = IXPMembershipRecord.objects.filter(member=member)
     assert current_membership.first().end_date.strftime(
@@ -258,12 +245,13 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
         created_date=date_after_date_left, ix_id=ixp.peeringdb_id, asn=member.asn.number
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor(
+    process_member_data(
         [
             member_data_with_created_date_after_date_left,
             member_data_with_created_date_after_date_left,
-        ]
+        ],
+        date_now,
+        TestLookup(),
     )
 
     memberships = IXPMembershipRecord.objects.filter(member=member)
@@ -286,8 +274,7 @@ def test_do_not_add_new_membership_for_same_created_date():
         created_date=created_date, ix_id=ixp.peeringdb_id, asn=member.asn.number
     )
 
-    processor = importers.process_member_data(date_now, TestLookup())
-    processor([member_import])
+    process_member_data([member_import], date_now, TestLookup())
 
     memberships = IXPMembershipRecord.objects.filter(member=member)
     assert len(memberships) == 1

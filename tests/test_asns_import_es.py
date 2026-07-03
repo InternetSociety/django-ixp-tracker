@@ -1,11 +1,9 @@
 from datetime import datetime, timezone
 
 import pytest
-import responses
 from faker import Faker
 
-from django_test_app.settings import IXP_TRACKER_PEERING_DB_URL
-from ixp_tracker import importers
+from ixp_tracker.importers import process_asn_data
 from ixp_tracker.ixp_tracker_aggregates import NetworkType, PeeringPolicy
 
 from .fixtures import PeeringASNFactory, build_app, MockLookup
@@ -16,21 +14,11 @@ processing_date = datetime.now(timezone.utc)
 
 def test_with_empty_response_does_nothing():
     app, _ = build_app()
-    processor = importers.process_asn_data(processing_date, MockLookup(), app)
-    processor([])
+
+    process_asn_data([], processing_date, MockLookup(), app)
 
     asns = app.get_all_asns()
     assert len(asns) == 0
-
-
-def test_with_no_existing_data_gets_all_data():
-    with responses.RequestsMock() as rsps:
-        app, _ = build_app()
-        rsps.get(url=IXP_TRACKER_PEERING_DB_URL + "/net?limit=200&skip=0", body="")
-        importers.import_asns(processing_date, MockLookup(), False, es_app=app)
-
-        asns = app.get_all_asns()
-        assert len(asns) == 0
 
 
 def test_imports_new_asn(faker: Faker):
@@ -39,12 +27,13 @@ def test_imports_new_asn(faker: Faker):
     customer_asns = faker.pylist(
         nb_elements=10, variable_nb_elements=True, value_types=[int]
     )
-    processor = importers.process_asn_data(
+
+    process_asn_data(
+        [data_to_import],
         processing_date,
         MockLookup(routed_asns=[data_to_import["asn"]], customer_asns=customer_asns),
         app,
     )
-    processor([data_to_import])
 
     asns = app.get_all_asns()
     assert len(asns) == 1
@@ -55,11 +44,10 @@ def test_imports_new_asn(faker: Faker):
 
 def test_uses_defaults_for_network_type_and_peering_policy_if_invalid():
     app, _ = build_app()
-    processor = importers.process_asn_data(processing_date, MockLookup(), app)
     asn_data = PeeringASNFactory()
     asn_data["info_type"] = "foobar"
     asn_data["policy_general"] = "foobar"
-    processor([asn_data])
+    process_asn_data([asn_data], processing_date, MockLookup(), app)
 
     asns = app.get_all_asns()
     assert len(asns) == 1
@@ -83,10 +71,9 @@ def test_updates_existing_data(faker):
         faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
 
-    processor = importers.process_asn_data(
-        processing_date, MockLookup(default_country="AU"), app
+    process_asn_data(
+        [updated_asn_data], processing_date, MockLookup(default_country="AU"), app
     )
-    processor([updated_asn_data])
 
     asns = app.get_all_asns()
     assert len(asns) == 1
@@ -101,8 +88,8 @@ def test_handles_errors_with_source_data():
     data_with_problems["asn"] = "foobar"
 
     app, _ = build_app()
-    processor = importers.process_asn_data(processing_date, MockLookup(), app)
-    processor([data_with_problems])
+
+    process_asn_data([data_with_problems], processing_date, MockLookup(), app)
 
     asns = app.get_all_asns()
     assert len(asns) == 0
@@ -118,8 +105,13 @@ def test_uses_registration_country_at_processing_date():
             return self.default_country
 
     app, _ = build_app()
-    processor = importers.process_asn_data(processing_date, DateSensitiveLookup(), app)
-    processor([PeeringASNFactory(updated_date=updated_date)])
+
+    process_asn_data(
+        [PeeringASNFactory(updated_date=updated_date)],
+        processing_date,
+        DateSensitiveLookup(),
+        app,
+    )
 
     asns = app.get_all_asns()
     asn_added = asns[0]

@@ -46,4 +46,3 @@ TEMPLATES = [
 DEBUG = True
 
 IXP_TRACKER_PEERING_DB_URL = "https://www.peeringdb.com/api"
-IXP_TRACKER_PEERING_DB_KEY = "foobar"
