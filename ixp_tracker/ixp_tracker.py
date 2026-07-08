@@ -312,7 +312,7 @@ class IXPTracker:
                 if asn:
                     member_records.append(
                         {
-                            "member_since": member.date_joined,
+                            "member_since": member.date_joined.date(),
                             "speed": member.port_speed,
                             "is_rs_peer": member.is_rs_peer,
                             "asn": {

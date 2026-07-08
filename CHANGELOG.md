@@ -6,6 +6,9 @@
 - fixes issue where we were using an out-of-date AS registration country from NRO stats to mark defunct ASes as having left an IX
 - fixes issue where AS112 was being marked as having left an IX (due to AS112 being registered to country ZZ)
 
+## 2rc7
+- ensure we always return dates not datetimes in fetch_last_updated
+
 ## 2rc6
 - refactor import
 

@@ -1,4 +1,4 @@
-from datetime import timedelta, timezone
+from datetime import timedelta, timezone, date, datetime
 from statistics import median
 
 import pytest
@@ -158,3 +158,20 @@ def test_with_offset_after_last_id_returns_nothing(faker: Faker):
     records = app.fetch_updated_ixp_records(None, first_id=(last_id + 1))
 
     assert len(records) == 0
+
+
+def test_ensure_we_return_date_not_datetime(faker: Faker):
+    app, es = build_app()
+    ixp = create_ixp(faker, es, created_date=after_cut_off_date)
+    create_member(faker, es, ixp, create_asn(faker, es))
+
+    records = app.fetch_updated_ixp_records(test_cut_off_date)
+
+    assert len(records) == 1
+    ixp_record = records[0]
+    assert isinstance(ixp_record["last_updated"], date)
+    assert not isinstance(ixp_record["last_updated"], datetime)
+
+    member = ixp_record["members"][0]
+    assert isinstance(member["member_since"], date)
+    assert not isinstance(member["member_since"], datetime)
