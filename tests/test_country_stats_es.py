@@ -86,6 +86,7 @@ def test_generates_stats(faker: Faker):
     assert stats.member_count == 4
     assert stats.domestic_network_membership == 0.25
     assert stats.domestic_network_coverage == 0.5
+    assert stats.total_capacity > 0
 
 
 def test_generates_ixp_counts(faker: Faker):

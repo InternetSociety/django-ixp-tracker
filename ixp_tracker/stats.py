@@ -336,6 +336,10 @@ def do_generate_stats(
                 all_stats_per_country[ixp.country_code]["member_and_customer_asns"] |= (
                     set(customer_asns)
                 )
+                # We count capacity for all members, i.e. an ASN member at 2 IXPs will have capacity at each included in the sum
+                all_stats_per_country[ixp.country_code]["total_capacity"] += (
+                    total_capacity
+                )
         for code, _ in list(countries):
             country_stats = all_stats_per_country[code]
             if country_stats.get("all_asns") is None:
