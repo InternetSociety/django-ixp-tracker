@@ -71,13 +71,23 @@ class Projection(ABC):
             self.events = []
 
     def handle(self, event: StoredEvent, aggregate: T):
-        if event.aggregate_type not in self.aggregate_types:
-            return
-        if event.event_type not in self.events:
+        if not self.can_handle(event):
             return
         self.do_handle(event, aggregate)
 
+    def can_handle(self, event: StoredEvent) -> bool:
+        if event.aggregate_type not in self.aggregate_types:
+            return False
+        if event.event_type not in self.events:
+            return False
+        return True
+
+    @abstractmethod
     def do_handle(self, event: StoredEvent, aggregate: T):
+        pass
+
+    @abstractmethod
+    def reset(self):
         pass
 
 
@@ -97,6 +107,7 @@ class EventStorePersistence(ABC):
         aggregate_type: type[T],
         sequence: int | None,
         as_at: datetime | None = None,
+        version: int | None = None,
     ) -> list[StoredEvent]:
         pass
 
@@ -118,7 +129,10 @@ class EventStorePersistence(ABC):
 
     @abstractmethod
     def load_snapshot(
-        self, aggregate_id: UUID, as_at: datetime | None = None
+        self,
+        aggregate_id: UUID,
+        as_at: datetime | None = None,
+        version: int | None = None,
     ) -> tuple[dict, int] | tuple[None, None]:
         pass
 
@@ -160,14 +174,23 @@ class EventStore:
         return aggregate
 
     def get_aggregate(
-        self, aggregate_id: UUID, aggregate_type: type[T], as_at: datetime | None = None
+        self,
+        aggregate_id: UUID,
+        aggregate_type: type[T],
+        as_at_date: datetime | None = None,
+        version: int | None = None,
     ) -> T:
-        data, sequence = self.db.load_snapshot(aggregate_id, as_at)
+        if as_at_date and version:
+            logger.error(
+                "Retrieving and aggregate by date and version is not supported"
+            )
+            raise AggregateNotFound
+        data, sequence = self.db.load_snapshot(aggregate_id, as_at_date, version)
         aggregate = aggregate_type(aggregate_id)
         if data:
             aggregate.hydrate(data)
         events = self.db.get_aggregate_events(
-            aggregate_id, aggregate_type, sequence, as_at
+            aggregate_id, aggregate_type, sequence, as_at_date, version
         )
         if sequence is None and len(events) == 0:
             raise AggregateNotFound
@@ -213,6 +236,42 @@ class EventStore:
         aggregate.hydrate(data)
         return aggregate
 
+    def rebuild_projections(self, aggregate_map: dict):
+        for listener in self.listeners:
+            listener.reset()
+        finished = False
+        chunk_size = 1000
+        start = 0
+        while not finished:
+            events = StoredEvent.objects.order_by("pk")[start : (start + chunk_size)]
+            if events.count() == 0:
+                finished = True
+            logger.debug(
+                "Processing events", extra={"start": start, "chunk_size": chunk_size}
+            )
+            for event in events:
+                handlers = [
+                    listener
+                    for listener in self.listeners
+                    if listener.can_handle(event)
+                ]
+                if len(handlers) == 0:
+                    continue
+                aggregate_type = aggregate_map.get(event.aggregate_type, None)
+                if not aggregate_type:
+                    logger.warning(
+                        "Cannot find aggregate type",
+                        extra={"aggregate": event.aggregate_type},
+                    )
+                    continue
+                aggregate = self.get_aggregate(
+                    event.aggregate_id, aggregate_type, version=event.event_sequence
+                )
+                for handler in handlers:
+                    handler.handle(event, aggregate)
+            start += chunk_size
+        return
+
 
 class DjangoEventStore(EventStorePersistence):
     def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
@@ -232,12 +291,15 @@ class DjangoEventStore(EventStorePersistence):
         aggregate_type: type[T],
         sequence: int | None,
         as_at: datetime | None = None,
+        version: int | None = None,
     ):
         events = StoredEvent.objects.filter(aggregate_id=aggregate_id)
         if sequence is not None:
             events = events.filter(event_sequence__gt=sequence)
         if as_at is not None:
             events = events.filter(event_date__lte=as_at)
+        if version is not None:
+            events = events.filter(event_sequence__lte=version)
         return events.order_by("event_sequence").all()
 
     def get_all(
@@ -263,11 +325,16 @@ class DjangoEventStore(EventStorePersistence):
         )
 
     def load_snapshot(
-        self, aggregate_id: UUID, as_at: datetime | None = None
+        self,
+        aggregate_id: UUID,
+        as_at: datetime | None = None,
+        version: int | None = None,
     ) -> tuple[dict, int] | tuple[None, None]:
         snapshots = AggregateSnapshot.objects.filter(aggregate_id=aggregate_id)
         if as_at is not None:
             snapshots = snapshots.filter(snapshot_date__lte=as_at)
+        elif version is not None:
+            snapshots = snapshots.filter(event_sequence__lte=version)
         snapshot = snapshots.first()
         if snapshot is None:
             return None, None

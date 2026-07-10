@@ -456,6 +456,9 @@ class TestProjection(Projection):
     def do_handle(self, event: StoredEvent, aggregate: Aggregate):
         self.handled = True
 
+    def reset(self):
+        pass
+
 
 class MemoryEventStore(EventStorePersistence):
     def __init__(self):
@@ -479,12 +482,15 @@ class MemoryEventStore(EventStorePersistence):
         aggregate_type: type[T],
         sequence: int | None,
         as_at: datetime | None = None,
+        version: int | None = None,
     ) -> list[StoredEvent]:
         events = [e for e in self.events if e.aggregate_id == aggregate_id]
         if sequence is not None:
             events = [e for e in events if e.event_sequence > sequence]
         if as_at is not None:
             events = [e for e in events if e.event_date <= as_at]
+        if version is not None:
+            events = [e for e in events if e.event_sequence <= version]
         return events
 
     def get_all(
@@ -509,7 +515,10 @@ class MemoryEventStore(EventStorePersistence):
         self.snapshots[aggregate_id] = (json.dumps(data), sequence, date_now)
 
     def load_snapshot(
-        self, aggregate_id: UUID, as_at: datetime | None = None
+        self,
+        aggregate_id: UUID,
+        as_at: datetime | None = None,
+        version: int | None = None,
     ) -> tuple[dict, int] | tuple[None, None]:
         snapshot = self.snapshots.get(aggregate_id, None)
         if snapshot is None:

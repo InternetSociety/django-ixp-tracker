@@ -424,6 +424,12 @@ class IXP(Aggregate):
         return IXPMemberDetails(**member_details)  # type: ignore
 
 
+IXP_TRACKER_AGGREGATE_MAP = {
+    "ASN": ASN,
+    "IXP": IXP,
+}
+
+
 def stringify_date(date_value: datetime) -> str:
     if date_value.tzinfo is None:
         date_value = date_value.replace(tzinfo=timezone.utc)

@@ -33,6 +33,9 @@ class ASNList(Projection):
         )
         asn_map.save()
 
+    def reset(self):
+        ASNMap.objects.all().delete()
+
 
 class IXPIdMapProjection(Projection):
     aggregate_types = [IXP.__name__]
@@ -59,6 +62,14 @@ class IXPIdMapProjection(Projection):
             return IXPIdMap.objects.get(peeringdb_id=peeringdb_id)
         except IXPIdMap.DoesNotExist:
             return None
+
+    def reset(self):
+        # This projection needs to be reset manually as we need to preserve the IXP ids
+        existing = IXPIdMap.objects.exclude(
+            aggregate_id__startswith="aaaabbbb-cccc-dddd-eeee-"
+        )
+        if existing.count() > 0:
+            raise RuntimeError("You must reset IXPIdMapProjection manually")
 
 
 class IXPsLastUpdatedProjection(Projection):
@@ -102,3 +113,6 @@ class IXPsLastUpdatedProjection(Projection):
         if since:
             updated = updated.filter(last_updated__gte=since)
         return list(updated.all()[:count])
+
+    def reset(self):
+        UpdatedIXPs.objects.all().delete()
