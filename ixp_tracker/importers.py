@@ -28,6 +28,7 @@ from ixp_tracker.ixp_tracker_aggregates import (
     NetworkType,
     PeeringPolicy,
     is_ixp_active,
+    NROStatus,
 )
 from ixp_tracker.ixp_tracker_projections import (
     ASNList,
@@ -111,19 +112,22 @@ def import_data(
         except JSONDecodeError:
             # It seems some of the Peering dumps use single quotes so try and load using ast in this case
             all_pdb_data = ast.literal_eval(backfill_raw)
-    es_app = build_app(additional_data, processing_date, disable_event_sourcing)
+    es_app = build_app(processing_date, disable_event_sourcing)
     ixp_data = all_pdb_data.get("ix", {"data": []}).get("data", [])
     process_ixp_data(ixp_data, processing_date, additional_data, es_app)
     asn_data = all_pdb_data.get("net", {"data": []}).get("data", [])
-    process_asn_data(asn_data, processing_date, additional_data, es_app)
+    # This is an optimisation to improve import performance. Peering DB list of networks contains about 2x the number of networks in the member list
+    # So, fo now, we choose only to import the ASN data referenced in the member data
     member_data = all_pdb_data.get("netixlan", {"data": []}).get("data", [])
+    member_asns = set([int(m["asn"]) for m in member_data])
+    filtered_asn_data = [a for a in asn_data if a["asn"] in member_asns]
+    process_asn_data(filtered_asn_data, processing_date, additional_data, es_app)
     process_member_data(member_data, processing_date, additional_data, es_app)
     toggle_ixp_active_status(processing_date, es_app)
     logger.debug("Toggled IXPs active status")
 
 
 def build_app(
-    geo_lookup: ASNGeoLookup,
     import_date: datetime | None = None,
     disable_event_sourcing: bool = False,
 ) -> IXPTracker | None:
@@ -133,7 +137,7 @@ def build_app(
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
     es.add_listener(IXPsLastUpdatedProjection())
-    app = IXPTracker(es, geo_lookup)
+    app = IXPTracker(es)
     if import_date:
         # We always set the time travel so the monthly stats can run safely for the first of each month,
         # and we set the time elements to zero to ensure we always get all events for that date
@@ -245,6 +249,10 @@ def process_asn_data(
                     country_code, processing_date
                 )
                 try:
+                    nro_status = NROStatus(geo_lookup.get_status(asn, processing_date))
+                except ValueError:
+                    nro_status = NROStatus.UNKNOWN
+                try:
                     network_type = NetworkType(asn_data["info_type"])
                 except ValueError:
                     network_type = NetworkType.UNKNOWN
@@ -259,6 +267,7 @@ def process_asn_data(
                     peering_policy,
                     asn_data["id"],
                     country_code,
+                    nro_status,
                     asn in routed_asns,
                     geo_lookup.get_customer_asns([asn], processing_date),
                 )

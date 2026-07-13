@@ -3,9 +3,6 @@ from datetime import datetime, timedelta, date
 from typing import TypedDict, Any
 from uuid import uuid4, UUID
 
-from ixp_tracker.ixp_tracker_aggregates import is_ixp_active
-
-from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.event_store import (
     EventStore,
     AggregateNotFound,
@@ -27,9 +24,8 @@ class MemberImportData(TypedDict):
 
 
 class IXPTracker:
-    def __init__(self, es: EventStore, geo_lookup: ASNGeoLookup):
+    def __init__(self, es: EventStore):
         self.es = es
-        self.geo_lookup = geo_lookup
 
     def import_ixp(
         self,
@@ -149,6 +145,7 @@ class IXPTracker:
         peering_policy: ixpt.PeeringPolicy,
         peeringdb_id: int,
         country_code,
+        nro_status: ixpt.NROStatus,
         is_routed: bool,
         customer_asns: list[int],
     ):
@@ -163,6 +160,8 @@ class IXPTracker:
                 updates["peering_policy"] = peering_policy.value
             if country_code != entity.country_code:
                 updates["country_code"] = country_code
+            if nro_status != entity.nro_status:
+                updates["nro_status"] = nro_status.value
             if is_routed != entity.is_routed:
                 updates["is_routed"] = is_routed
             if customer_asns != entity.customer_asns:
@@ -182,6 +181,7 @@ class IXPTracker:
                 peering_policy.value,
                 peeringdb_id,
                 country_code,
+                nro_status.value,
                 is_routed,
                 customer_asns,
             )
@@ -204,7 +204,7 @@ class IXPTracker:
             member_registered_to_zz_and_has_left_already = (
                 existing_member
                 and existing_member.date_left is not None
-                and as_zz_country_check(member["asn"], processing_date, self.geo_lookup)
+                and as_zz_country_check(as_entity)
             )
             if member_registered_to_zz_and_has_left_already:
                 continue
@@ -244,19 +244,17 @@ class IXPTracker:
 
     def check_ixp_inactive(self, ixp: ixpt.IXP, processing_date: datetime) -> ixpt.IXP:
         members = ixp.get_members()
-        members_left = check_if_members_have_left(
-            members, processing_date, self.geo_lookup
-        )
+        members_left = self.check_if_members_have_left(members, processing_date)
         for member_left in members_left:
             left_event = ixpt.IXPMemberLeft(
                 member_left[0], ixpt.stringify_date(member_left[1])
             )
             ixp = self.es.store(ixp, left_event)
         member_asns = list(ixp.get_members().keys())
-        if ixp.active_status is False and is_ixp_active(member_asns):
+        if ixp.active_status is False and ixpt.is_ixp_active(member_asns):
             active_event = ixpt.IXPBecameActive()
             ixp = self.es.store(ixp, active_event)
-        elif ixp.active_status is True and not is_ixp_active(member_asns):
+        elif ixp.active_status is True and not ixpt.is_ixp_active(member_asns):
             inactive_event = ixpt.IXPBecameInactive()
             ixp = self.es.store(ixp, inactive_event)
         return ixp
@@ -271,7 +269,7 @@ class IXPTracker:
     def find_isoc_id(self, aggregate_id: UUID) -> int | None:
         try:
             id_map = IXPIdMap.objects.get(aggregate_id=aggregate_id)
-            return id_map.id
+            return id_map.pk
         except IXPIdMap.DoesNotExist:
             return None
 
@@ -281,10 +279,12 @@ class IXPTracker:
     def get_all_asns(self):
         return self.es.get_all(ixpt.ASN)
 
-    def get_asn(self, asn) -> ixpt.ASN | None:
+    def get_asn(self, asn, as_at: datetime | None = None) -> ixpt.ASN | None:
         try:
             asn_map = ASNMap.objects.get(asn=asn)
-            return self.es.get_aggregate(asn_map.aggregate_id, ixpt.ASN)
+            return self.es.get_aggregate(
+                asn_map.aggregate_id, ixpt.ASN, as_at_date=as_at
+            )
         except ASNMap.DoesNotExist:
             return None
 
@@ -348,46 +348,44 @@ class IXPTracker:
             ixp_records.append(current)
         return ixp_records
 
+    def check_if_members_have_left(
+        self,
+        members: dict[int, ixpt.IXPMemberDetails],
+        processing_date: datetime,
+    ) -> list[tuple[int, datetime]]:
+        start_of_month = processing_date.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        members_left: list[tuple[int, datetime]] = []
+        for member_asn in members.keys():
+            member = members[member_asn]
+            if member.last_active < start_of_month:
+                start_of_month_after_last_active = (
+                    member.last_active.replace(day=1) + timedelta(days=33)
+                ).replace(day=1)
+                end_of_month = start_of_month_after_last_active - timedelta(days=1)
+                members_left.append((member_asn, end_of_month))
+            as_entity = self.get_asn(member_asn, as_at=processing_date)
+            if member.date_left is None and (
+                as_entity is None or as_zz_country_check(as_entity)
+            ):
+                end_of_last_month_active = member.last_active.replace(
+                    day=1
+                ) - timedelta(days=1)
+                members_left.append((member_asn, end_of_last_month_active))
+        return members_left
 
-def check_if_members_have_left(
-    members: dict[int, ixpt.IXPMemberDetails],
-    processing_date: datetime,
-    geo_lookup: ASNGeoLookup,
-) -> list[tuple[int, datetime]]:
-    start_of_month = processing_date.replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    )
-    members_left: list[tuple[int, datetime]] = []
-    for member_asn in members.keys():
-        member = members[member_asn]
-        if member.last_active < start_of_month:
-            start_of_month_after_last_active = (
-                member.last_active.replace(day=1) + timedelta(days=33)
-            ).replace(day=1)
-            end_of_month = start_of_month_after_last_active - timedelta(days=1)
-            members_left.append((member_asn, end_of_month))
-        if member.date_left is None and as_zz_country_check(
-            member_asn, processing_date, geo_lookup
-        ):
-            end_of_last_month_active = member.last_active.replace(day=1) - timedelta(
-                days=1
-            )
-            members_left.append((member_asn, end_of_last_month_active))
-    return members_left
 
-
-def as_zz_country_check(asn: int, as_at: datetime, geo_lookup: ASNGeoLookup) -> bool:
+def as_zz_country_check(asn: ixpt.ASN) -> bool:
     # AS112 is a special case, see https://www.as112.net). It's marked as registered to country ZZ in NRO so we ignore it here
-    if asn == 112:
+    if asn.number == 112:
         return False
-    country = geo_lookup.get_iso2_country(asn, as_at)
-    status = geo_lookup.get_status(asn, as_at)
-    if country != "ZZ":
+    if asn.country_code != "ZZ":
         return False
-    if status == "assigned":
+    if asn.nro_status == ixpt.NROStatus.ASSIGNED:
         logger.warning(
             "AS registered to ZZ and marked as assigned",
-            extra={"asn": asn, "date": as_at},
+            extra={"asn": asn.number},
         )
         return False
     return True

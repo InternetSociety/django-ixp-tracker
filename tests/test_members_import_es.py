@@ -21,6 +21,8 @@ date_now = datetime.now(timezone.utc)
 
 def test_adds_new_members(faker):
     app, es = build_app()
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     asn_one = create_asn(faker, es)
     asn_two = create_asn(faker, es)
@@ -45,6 +47,8 @@ def test_adds_new_members(faker):
 def test_does_nothing_if_no_asn_found(faker):
     des = DjangoEventStore()
     app, es = build_app(des)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
     fixture_events = len(des.get_events())
@@ -57,6 +61,8 @@ def test_does_nothing_if_no_asn_found(faker):
 def test_does_nothing_if_no_ixp_found(faker):
     des = DjangoEventStore()
     app, es = build_app(des)
+    app.time_travel(date_now)
+
     asn = create_asn(faker, es)
     member_import = PeeringNetIXLANFactory(asn=asn.number)
     fixture_events = len(des.get_events())
@@ -69,6 +75,8 @@ def test_does_nothing_if_no_ixp_found(faker):
 
 def test_updates_member(faker):
     app, es = build_app()
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
     create_member(faker, es, ixp, asn, {"speed": 500, "is_rs_peer": False})
@@ -88,6 +96,8 @@ def test_updates_member(faker):
 
 def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
     app, es = build_app()
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es, True)
     # Create 3 existing members
     for member_count in range(1, 4):

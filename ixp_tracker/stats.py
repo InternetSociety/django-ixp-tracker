@@ -37,7 +37,7 @@ def generate_stats(
     disable_event_sourcing: bool = False,
 ):
     stats_date = stats_date or datetime.now(timezone.utc)
-    es_app = build_app(lookup, stats_date, disable_event_sourcing)
+    es_app = build_app(stats_date, disable_event_sourcing)
     do_generate_stats(lookup, stats_date, es_app)
 
 

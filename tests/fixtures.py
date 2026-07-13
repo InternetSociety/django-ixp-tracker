@@ -34,6 +34,7 @@ from ixp_tracker.ixp_tracker_aggregates import (
     NetworkType,
     PeeringPolicy,
     stringify_date,
+    NROStatus,
 )
 from ixp_tracker.ixp_tracker_projections import (
     ASNList,
@@ -529,13 +530,12 @@ class MemoryEventStore(EventStorePersistence):
 
 def build_app(
     es_db: EventStorePersistence | None = None,
-    lookup: AdditionalDataSources | None = None,
 ) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
     es.add_listener(IXPsLastUpdatedProjection())
-    app = IXPTracker(es, lookup or MockLookup())
+    app = IXPTracker(es)
     return app, es
 
 
@@ -591,11 +591,13 @@ def create_asn(
     es: EventStore,
     country_code: str | None = None,
     asn: int | None = None,
+    nro_status: NROStatus | None = None,
 ) -> ASN:
     as_number = asn or faker.random_number(digits=5)
     network_type = faker.random_element(NetworkType)
     name = faker.company()
     peering_policy = faker.random_element(PeeringPolicy)
+    nro_status_value: NROStatus = nro_status or faker.random_element(NROStatus)
     peeringdb_id = faker.random_number(digits=3)
     country_code = country_code or faker.country_code()
     asn_entity = ASN(id=uuid4())
@@ -606,6 +608,7 @@ def create_asn(
         peering_policy.value,
         peeringdb_id,
         country_code,
+        nro_status_value.value,
         faker.pybool(),
         faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )

@@ -6,6 +6,9 @@
 - fixes issue where we were using an out-of-date AS registration country from NRO stats to mark defunct ASes as having left an IX
 - fixes issue where AS112 was being marked as having left an IX (due to AS112 being registered to country ZZ)
 
+## 2rc11
+- add NRO status to ASN aggregates to improve import performance
+
 ## 2rc10
 - add command to rebuild projections
 

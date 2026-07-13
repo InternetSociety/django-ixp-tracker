@@ -4,6 +4,7 @@ from faker.proxy import Faker
 from ixp_tracker.ixp_tracker_aggregates import (
     NetworkType,
     PeeringPolicy,
+    NROStatus,
 )
 from tests.fixtures import create_asn, MemoryEventStore, build_app
 
@@ -17,6 +18,7 @@ def test_registers_asn(faker: Faker):
     network_type = faker.random_element(NetworkType)
     name = faker.company()
     peering_policy = faker.random_element(PeeringPolicy)
+    nro_status = faker.random_element(NROStatus)
     peeringdb_id = faker.random_number(digits=3)
     asn = app.import_asn(
         as_number,
@@ -25,6 +27,7 @@ def test_registers_asn(faker: Faker):
         peering_policy,
         peeringdb_id,
         faker.country_code(),
+        nro_status,
         faker.pybool(),
         faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
@@ -45,6 +48,7 @@ def test_updates_asn(faker):
     new_name = asn.name + "X"
     new_network_policy = faker.random_element(NetworkType)
     new_peering_policy = faker.random_element(PeeringPolicy)
+    nro_status = faker.random_element(NROStatus)
     new_country = faker.country_code()
     new_is_routed = not asn.is_routed
     new_customer_asns = faker.pylist(
@@ -57,6 +61,7 @@ def test_updates_asn(faker):
         new_peering_policy,
         asn.peeringdb_id,
         new_country,
+        nro_status,
         new_is_routed,
         new_customer_asns,
     )
@@ -81,6 +86,7 @@ def test_does_not_update_fields_if_not_changed(faker):
         asn.peering_policy,
         asn.peeringdb_id,
         asn.country_code,
+        asn.nro_status,
         asn.is_routed,
         asn.customer_asns,
     )
@@ -106,6 +112,7 @@ def test_records_peeringdb_id_change_as_separate_event(faker):
         asn.peering_policy,
         asn.peeringdb_id + 1,
         asn.country_code,
+        asn.nro_status,
         asn.is_routed,
         asn.customer_asns,
     )

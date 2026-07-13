@@ -4,7 +4,7 @@ import pytest
 from faker import Faker
 
 from ixp_tracker.importers import process_asn_data
-from ixp_tracker.ixp_tracker_aggregates import NetworkType, PeeringPolicy
+from ixp_tracker.ixp_tracker_aggregates import NetworkType, PeeringPolicy, NROStatus
 
 from .fixtures import PeeringASNFactory, build_app, MockLookup
 
@@ -31,7 +31,11 @@ def test_imports_new_asn(faker: Faker):
     process_asn_data(
         [data_to_import],
         processing_date,
-        MockLookup(routed_asns=[data_to_import["asn"]], customer_asns=customer_asns),
+        MockLookup(
+            routed_asns=[data_to_import["asn"]],
+            customer_asns=customer_asns,
+            default_status="available",
+        ),
         app,
     )
 
@@ -40,6 +44,7 @@ def test_imports_new_asn(faker: Faker):
     as_entity = asns[0]
     assert as_entity.is_routed
     assert as_entity.customer_asns == customer_asns
+    assert as_entity.nro_status == NROStatus.AVAILABLE
 
 
 def test_uses_defaults_for_network_type_and_peering_policy_if_invalid():
@@ -67,12 +72,16 @@ def test_updates_existing_data(faker):
         PeeringPolicy.OPEN,
         updated_asn_data["id"],
         faker.country_code(),
+        NROStatus.AVAILABLE,
         faker.pybool(),
         faker.pylist(nb_elements=10, variable_nb_elements=True, value_types=[int]),
     )
 
     process_asn_data(
-        [updated_asn_data], processing_date, MockLookup(default_country="AU"), app
+        [updated_asn_data],
+        processing_date,
+        MockLookup(default_country="AU", default_status="assigned"),
+        app,
     )
 
     asns = app.get_all_asns()
@@ -80,6 +89,7 @@ def test_updates_existing_data(faker):
     updated = asns.pop(0)
     assert updated.name == updated_asn_data["name"]
     assert updated.country_code == "AU"
+    assert updated.nro_status == NROStatus.ASSIGNED
 
 
 def test_handles_errors_with_source_data():

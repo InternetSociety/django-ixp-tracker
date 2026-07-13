@@ -122,6 +122,7 @@ class ASNCreated(DomainEvent):
     peering_policy: str
     peeringdb_id: int
     country_code: str
+    nro_status: str
     is_routed: bool
     customer_asns: list[int]
 
@@ -132,6 +133,7 @@ class ASNUpdated(DomainEvent):
     network_type: str | ValueNotChanged = ValueNotChanged()
     peering_policy: str | ValueNotChanged = ValueNotChanged()
     country_code: str | ValueNotChanged = ValueNotChanged()
+    nro_status: str | ValueNotChanged = ValueNotChanged()
     is_routed: bool | ValueNotChanged = ValueNotChanged()
     customer_asns: list[int] | ValueNotChanged = ValueNotChanged()
 
@@ -186,6 +188,14 @@ class PeeringPolicy(Enum):
     UNKNOWN = "Unknown"
 
 
+class NROStatus(Enum):
+    ASSIGNED = "assigned"
+    AVAILABLE = "available"
+    IANAPOOL = "ianapool"
+    RESERVED = "reserved"
+    UNKNOWN = "unknown"
+
+
 class ASN(Aggregate):
     name: str
     number: int
@@ -194,6 +204,7 @@ class ASN(Aggregate):
     network_type: NetworkType
     peering_policy: PeeringPolicy
     country_code: str
+    nro_status: NROStatus
     is_routed: bool
     customer_asns: list[int]
 
@@ -204,6 +215,7 @@ class ASN(Aggregate):
         self.network_type = NetworkType(event.network_type)
         self.peering_policy = PeeringPolicy(event.peering_policy)
         self.country_code = event.country_code
+        self.nro_status = NROStatus(event.nro_status)
         self.is_routed = event.is_routed
         self.customer_asns = event.customer_asns
 
@@ -214,6 +226,8 @@ class ASN(Aggregate):
             self.network_type = NetworkType(event.network_type)
         if not isinstance(event.peering_policy, ValueNotChanged):
             self.peering_policy = PeeringPolicy(event.peering_policy)
+        if not isinstance(event.nro_status, ValueNotChanged):
+            self.nro_status = NROStatus(event.nro_status)
         if not isinstance(event.country_code, ValueNotChanged):
             self.country_code = event.country_code
 

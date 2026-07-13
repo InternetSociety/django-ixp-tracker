@@ -5,12 +5,12 @@ from faker import Faker
 from ixp_tracker.ixp_tracker import (
     MemberImportData,
 )
+from ixp_tracker.ixp_tracker_aggregates import NROStatus
 from tests.fixtures import (
     create_ixp,
     create_asn,
     MemoryEventStore,
     create_member,
-    MockLookup,
     build_app,
 )
 
@@ -22,6 +22,7 @@ date_now = datetime.now(timezone.utc).replace(microsecond=0)
 def test_imports_member(faker: Faker):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
 
     asn = create_asn(faker, es)
     ixp = create_ixp(faker, es)
@@ -40,6 +41,7 @@ def test_imports_member(faker: Faker):
 def test_imports_multiple_members(faker: Faker):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
 
     asn1 = create_asn(faker, es)
     asn2 = create_asn(faker, es)
@@ -65,6 +67,8 @@ def test_imports_multiple_members(faker: Faker):
 def test_adds_new_membership_for_existing_member_marked_as_left(faker):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
     membership_properties = {
@@ -85,6 +89,8 @@ def test_adds_new_membership_for_member_marked_as_left_if_created_before_date_le
 ):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
     membership_properties = {
@@ -109,6 +115,8 @@ def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_membership
 ):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
     membership_properties = {
@@ -139,6 +147,8 @@ def test_adds_new_membership_event_if_created_date_is_same(faker):
 
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(created_date)
+
     ixp = create_ixp(faker, es)
     asn = create_asn(faker, es)
     membership_properties = {
@@ -164,6 +174,8 @@ def test_marks_ixp_active_if_has_three_members(
 ):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
     member_import_data = []
     for _ in range(1, 4):
@@ -182,6 +194,8 @@ def test_marks_ixp_inactive_if_members_drops_below_three(
 ):
     mes = MemoryEventStore()
     app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es, True)
     member_import_data = []
     # Create 3 existing members
@@ -207,11 +221,11 @@ def test_marks_ixp_inactive_if_members_drops_below_three(
 
 def test_member_marked_left_due_to_zz_country_registration_is_not_imported(faker):
     mes = MemoryEventStore()
-    app, es = build_app(
-        mes, MockLookup(default_country="ZZ", default_status="reserved")
-    )
+    app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
-    asn = create_asn(faker, es)
+    asn = create_asn(faker, es, country_code="ZZ", nro_status=NROStatus.RESERVED)
     membership_properties = {
         "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
     }
@@ -234,11 +248,13 @@ def test_as112_is_marked_as_rejoined(faker):
     # Normally an AS with country ZZ that has been marked as left would be ignored
     # But we want AS112 to be considered in this case as it probably means it has left and rejoined
     mes = MemoryEventStore()
-    app, es = build_app(
-        mes, MockLookup(default_country="ZZ", default_status="reserved")
-    )
+    app, es = build_app(mes)
+    app.time_travel(date_now)
+
     ixp = create_ixp(faker, es)
-    asn = create_asn(faker, es, asn=112)
+    asn = create_asn(
+        faker, es, asn=112, country_code="ZZ", nro_status=NROStatus.RESERVED
+    )
     membership_properties = {
         "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
     }
