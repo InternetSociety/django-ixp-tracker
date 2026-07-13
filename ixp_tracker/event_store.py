@@ -63,6 +63,10 @@ class EventOrderInvalid(Exception):
     pass
 
 
+class DataAlreadyImported(Exception):
+    pass
+
+
 class Projection(ABC):
     def __init__(self):
         if self.__getattribute__("aggregate_types") is None:
@@ -134,6 +138,10 @@ class EventStorePersistence(ABC):
         as_at: datetime | None = None,
         version: int | None = None,
     ) -> tuple[dict, int] | tuple[None, None]:
+        pass
+
+    @abstractmethod
+    def has_existing_data(self, as_at: datetime) -> bool:
         pass
 
 
@@ -340,3 +348,7 @@ class DjangoEventStore(EventStorePersistence):
             return None, None
         else:
             return snapshot.data, snapshot.event_sequence
+
+    def has_existing_data(self, as_at: datetime) -> bool:
+        existing_events = StoredEvent.objects.filter(event_date__gte=as_at)
+        return existing_events.count() > 0

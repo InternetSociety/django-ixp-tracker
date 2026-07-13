@@ -527,6 +527,10 @@ class MemoryEventStore(EventStorePersistence):
         self.snapshots_read.append(aggregate_id)
         return json.loads(snapshot[0]), snapshot[1]
 
+    def has_existing_data(self, as_at: datetime) -> bool:
+        existing_events = [e for e in self.events if e.event_date >= as_at]
+        return len(existing_events) > 0
+
 
 def build_app(
     es_db: EventStorePersistence | None = None,

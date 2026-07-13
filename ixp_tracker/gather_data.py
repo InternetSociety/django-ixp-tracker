@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime
 from json import JSONDecodeError
+from pathlib import Path
 from typing import TypedDict, Any
 
 from requests import Session
@@ -9,7 +10,6 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 
 from ixp_tracker.conf import (
-    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH,
     IXP_TRACKER_PEERING_DB_URL,
 )
 
@@ -112,7 +112,11 @@ def gather_data() -> AllPeeringDbData:
     }
 
 
-def save_data(all_data: AllPeeringDbData, processing_date: datetime):
-    file_name = f"{IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH}/{processing_date.year}{processing_date.month:02}{processing_date.day:02}.peeringdb_2_dump.json"
+def save_data(
+    all_data: AllPeeringDbData, processing_date: datetime, archive_path: Path | None
+):
+    if archive_path is None:
+        return
+    file_name = f"{archive_path}/{processing_date.year}{processing_date.month:02}{processing_date.day:02}.peeringdb_2_dump.json"
     with open(file_name, "w", encoding="utf-8") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=4)

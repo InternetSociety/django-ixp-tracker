@@ -1,9 +1,10 @@
 import ast
 import json
 import logging
+import os.path
 from datetime import datetime, timedelta, timezone
-from glob import glob
 from json.decoder import JSONDecodeError
+from pathlib import Path
 
 import dateutil.parser
 import requests
@@ -17,7 +18,7 @@ from ixp_tracker.conf import (
     IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH,
 )
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
-from ixp_tracker.event_store import DjangoEventStore, EventStore
+from ixp_tracker.event_store import DjangoEventStore, EventStore, DataAlreadyImported
 from ixp_tracker.gather_data import gather_data, save_data
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
@@ -44,74 +45,26 @@ def import_data(
     additional_data: AdditionalDataSources,
     processing_date: datetime | None = None,
     disable_event_sourcing: bool = False,
+    local_archive_path: Path | None = None,
 ):
+    today = datetime.now(timezone.utc)
+    local_archive_path = local_archive_path or Path(
+        str(IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH)
+    )
     if processing_date is None:
-        processing_date = datetime.now(timezone.utc)
+        processing_date = today
+    # If target import date is today it's unlikely CAIDA will have archived the data so we grab it directly from Peering DB
+    if processing_date.date() == today.date():
         try:
             all_pdb_data = gather_data()
-            save_data(all_pdb_data, processing_date)
+            save_data(all_pdb_data, processing_date, local_archive_path)
         except Exception as e:
             logger.error(
                 "Cannot download latest PeeringDB data", extra={"error": str(e)}
             )
             return
     else:
-        processing_date = processing_date.replace(day=1)
-        processing_month = processing_date.month
-        found = False
-        backfill_raw = None
-        if IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH is not None:
-            archive_search_path = f"{IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH}/{processing_date.year}{processing_date.month:02}*"
-            logger.debug(
-                "Searching for archive file locally",
-                extra={"search_path": archive_search_path},
-            )
-            possible_files = glob(archive_search_path)
-            if len(possible_files) > 0:
-                possible_files.sort()
-                archive_file = possible_files[0]
-                file_date = archive_file.replace(
-                    IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH + "/", ""
-                ).split(".")[0]
-                processing_date = datetime.strptime(file_date, "%Y%m%d").replace(
-                    tzinfo=timezone.utc
-                )
-                with open(archive_file) as f:
-                    backfill_raw = f.read()
-                    found = True
-                    logger.debug(
-                        "Found archive file locally",
-                        extra={
-                            "archive_file": archive_file,
-                            "processing_date": processing_date,
-                        },
-                    )
-        while processing_date.month == processing_month and not found:
-            url = DATA_ARCHIVE_URL.format(
-                year=processing_date.year,
-                month=processing_date.month,
-                day=processing_date.day,
-            )
-            data = requests.get(url)
-            if data.status_code == 200:
-                found = True
-                backfill_raw = data.text
-                logger.debug(
-                    "Retrieved archive file from CAIDA",
-                    extra={"processing_date": processing_date},
-                )
-            else:
-                processing_date = processing_date + timedelta(days=1)
-        if not found or not backfill_raw:
-            logger.warning(
-                "Cannot find backfill data", extra={"backfill_date": processing_date}
-            )
-            return
-        try:
-            all_pdb_data = json.loads(backfill_raw)
-        except JSONDecodeError:
-            # It seems some of the Peering dumps use single quotes so try and load using ast in this case
-            all_pdb_data = ast.literal_eval(backfill_raw)
+        all_pdb_data = get_archived_data(processing_date, local_archive_path)
     es_app = build_app(processing_date, disable_event_sourcing)
     ixp_data = all_pdb_data.get("ix", {"data": []}).get("data", [])
     process_ixp_data(ixp_data, processing_date, additional_data, es_app)
@@ -133,7 +86,10 @@ def build_app(
 ) -> IXPTracker | None:
     if not IXP_TRACKER_ENABLE_EVENT_SOURCING or disable_event_sourcing:
         return None
-    es = EventStore(IXP_TRACKER_EVENT_MAP, DjangoEventStore())
+    persistence = DjangoEventStore()
+    if import_date and persistence.has_existing_data(import_date):
+        raise DataAlreadyImported
+    es = EventStore(IXP_TRACKER_EVENT_MAP, persistence)
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
     es.add_listener(IXPsLastUpdatedProjection())
@@ -143,6 +99,64 @@ def build_app(
         # and we set the time elements to zero to ensure we always get all events for that date
         app.time_travel(import_date.replace(hour=0, minute=0, second=0, microsecond=0))
     return app
+
+
+def get_archived_data(processing_date: datetime, local_archive_path: Path | None):
+    oldest_archive_date = processing_date - timedelta(days=5)
+    backfill_raw = None
+    found = False
+    needs_save = False
+    while processing_date.date() >= oldest_archive_date.date() and not found:
+        archive_file_name = f"{local_archive_path}/{processing_date.year}{processing_date.month:02}{processing_date.day:02}.peeringdb_2_dump.json"
+        logger.debug(
+            "Searching for archive file locally",
+            extra={"search_path": archive_file_name},
+        )
+        if os.path.exists(archive_file_name):
+            with open(archive_file_name) as f:
+                backfill_raw = f.read()
+                found = True
+                logger.debug(
+                    "Found archive file locally",
+                    extra={
+                        "archive_file": archive_file_name,
+                        "processing_date": processing_date,
+                    },
+                )
+            continue
+        logger.debug(
+            "Checking CAIDA for archived data",
+            extra={"processing_date": processing_date},
+        )
+        url = DATA_ARCHIVE_URL.format(
+            year=processing_date.year,
+            month=processing_date.month,
+            day=processing_date.day,
+        )
+        data = requests.get(url)
+        if data.status_code == 200:
+            found = True
+            backfill_raw = data.text
+            logger.debug(
+                "Retrieved archive file from CAIDA",
+                extra={"processing_date": processing_date},
+            )
+            needs_save = True
+            continue
+        processing_date = processing_date - timedelta(days=1)
+    if not found or not backfill_raw:
+        logger.warning(
+            "Cannot find backfill data", extra={"backfill_date": processing_date}
+        )
+        return
+    try:
+        all_pdb_data = json.loads(backfill_raw)
+    except JSONDecodeError:
+        # It seems some of the Peering dumps use single quotes so try and load using ast in this case
+        all_pdb_data = ast.literal_eval(backfill_raw)
+    if needs_save:
+        save_data(all_pdb_data, processing_date, local_archive_path)
+    return all_pdb_data
 
 
 def process_ixp_data(
