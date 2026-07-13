@@ -6,6 +6,9 @@
 - fixes issue where we were using an out-of-date AS registration country from NRO stats to mark defunct ASes as having left an IX
 - fixes issue where AS112 was being marked as having left an IX (due to AS112 being registered to country ZZ)
 
+## 2rc9
+- add command to rebuild projections
+
 ## 2rc8
 - ensure we count total_capacity per country in the stats
 
