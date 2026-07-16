@@ -84,11 +84,11 @@ def test_prefers_caida_on_right_date_over_older_data_locally(tmp_path):
         assert caida.call_count == 1
 
 
-def test_gets_data_up_to_five_days_old(tmp_path):
-    five_days_before_backfill = backfill_date - timedelta(days=5)
+def test_gets_data_up_to_fifteen_days_old(tmp_path):
+    fifteen_days_before_backfill = backfill_date - timedelta(days=15)
     with responses.RequestsMock() as rsps:
         caida_query_date = backfill_date
-        while caida_query_date.date() > five_days_before_backfill.date():
+        while caida_query_date.date() > fifteen_days_before_backfill.date():
             data_url = DATA_ARCHIVE_URL.format(
                 year=caida_query_date.year,
                 month=caida_query_date.month,
@@ -114,11 +114,11 @@ def test_gets_data_up_to_five_days_old(tmp_path):
         assert len(ixps) == 1
 
 
-def test_with_no_data_up_to_five_days_old_returns_nothing(tmp_path):
-    five_days_before_backfill = backfill_date - timedelta(days=5)
+def test_with_no_data_up_to_fifteen_days_old_returns_nothing(tmp_path):
+    fifteen_days_before_backfill = backfill_date - timedelta(days=15)
     with responses.RequestsMock() as rsps:
         caida_query_date = backfill_date
-        while caida_query_date.date() >= five_days_before_backfill.date():
+        while caida_query_date.date() >= fifteen_days_before_backfill.date():
             data_url = DATA_ARCHIVE_URL.format(
                 year=caida_query_date.year,
                 month=caida_query_date.month,

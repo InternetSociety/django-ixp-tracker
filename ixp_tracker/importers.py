@@ -102,7 +102,9 @@ def build_app(
 
 
 def get_archived_data(processing_date: datetime, local_archive_path: Path | None):
-    oldest_archive_date = processing_date - timedelta(days=5)
+    # There is a gap in the CAIDA archive between 2020-01-20 and 2020-02-10 so we need to check back for
+    # at least 15 days to ensure we get the most recent archived data
+    oldest_archive_date = processing_date - timedelta(days=15)
     backfill_raw = None
     found = False
     needs_save = False
