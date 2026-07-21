@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 [unreleased]
+## 2.0.0
 - a complete internal rewrite to use an event-sourced architecture (see [rewrite ADR](docs/event-sourcing-rewrite.md) for more detail on the reasons behind this)
 - removed logic to try and infer IXP membership for ASNs
 - fixes issue where we were using an out-of-date AS registration country from NRO stats to mark defunct ASes as having left an IX
