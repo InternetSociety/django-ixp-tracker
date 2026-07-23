@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from ixp_tracker.event_store import EventStore, Aggregate, DomainEvent
-from ixp_tracker.ixp_tracker_aggregates import DATE_FORMAT
+from ixp_tracker.ixp_tracker_aggregates import dateify_string
 from tests.fixtures import (
     TestAggregate,
     TEST_EVENT_MAP,
@@ -51,14 +51,9 @@ def test_saves_datetime_to_snapshot():
         def created(self, event: AddedDatetime):
             self.foo = event.foo
 
-        def snapshot(self):
-            values = super().snapshot()
-            values["foo"] = self.foo.strftime(DATE_FORMAT)
-            return values
-
         def hydrate(self, data: dict):
             super().hydrate(data)
-            self.foo = datetime.strptime(data["foo"], DATE_FORMAT)
+            self.foo = dateify_string(data["foo"])
 
     es = EventStore(TEST_EVENT_MAP, MemoryEventStore())
 
