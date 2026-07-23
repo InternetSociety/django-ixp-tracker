@@ -5,7 +5,7 @@ from enum import Enum
 from ixp_tracker.event_store import DomainEvent, ValueNotChanged, Aggregate
 
 
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
+DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 
 
 @dataclass
@@ -423,8 +423,9 @@ def stringify_date(date_value: datetime) -> str:
 
 
 def dateify_string(string_value: str) -> datetime:
-    if "T" in string_value:
-        string_value = string_value.replace("T", " ")
+    # Older versions of the lib used a custom date format which had a space between the date and time rather than "T"
+    if "T" not in string_value:
+        string_value = string_value.replace(" ", "T")
     return datetime.strptime(string_value, DATE_FORMAT)
 
 
