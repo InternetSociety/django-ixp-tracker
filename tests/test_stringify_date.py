@@ -8,7 +8,7 @@ def test_returns_expected_string_format():
 
     date_string = stringify_date(test_date)
 
-    assert date_string == "2019-01-01 00:00:00+0000"
+    assert date_string == "2019-01-01T00:00:00+0000"
 
 
 def test_strips_microseconds():
@@ -16,7 +16,7 @@ def test_strips_microseconds():
 
     date_string = stringify_date(test_date)
 
-    assert date_string == "2019-01-01 00:00:00+0000"
+    assert date_string == "2019-01-01T00:00:00+0000"
 
 
 def test_preserves_existing_timezone():
@@ -26,7 +26,7 @@ def test_preserves_existing_timezone():
 
     date_string = stringify_date(test_date)
 
-    assert date_string == "2019-01-01 00:00:00+0100"
+    assert date_string == "2019-01-01T00:00:00+0100"
 
 
 def test_adds_timezone_if_needed():
@@ -34,4 +34,4 @@ def test_adds_timezone_if_needed():
 
     date_string = stringify_date(test_date)
 
-    assert date_string == "2019-01-01 00:00:00+0000"
+    assert date_string == "2019-01-01T00:00:00+0000"

@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from ixp_tracker.json import OrJSONSerializer
 
 
 class IXP(models.Model):
@@ -244,7 +245,7 @@ class StoredEvent(models.Model):
     event_date = models.DateTimeField()
     event_type = models.TextField(blank=False)
     event_sequence = models.IntegerField()
-    data = models.JSONField()
+    data = models.JSONField(encoder=OrJSONSerializer, decoder=OrJSONSerializer)
 
     def __str__(self):
         return f"{self.aggregate_id}-{self.event_sequence}-{self.event_type}"
@@ -307,7 +308,7 @@ class AggregateSnapshot(models.Model):
     aggregate_id = models.UUIDField()
     event_sequence = models.IntegerField()
     snapshot_date = models.DateTimeField()
-    data = models.JSONField()
+    data = models.JSONField(encoder=OrJSONSerializer, decoder=OrJSONSerializer)
 
     def __str__(self):
         return f"Snapshot for {self.aggregate_id} ({self.event_sequence})"
@@ -330,7 +331,7 @@ class UpdatedIXPs(models.Model):
         models.DateField()
     )  # We only need the date here as that simplifies querying.
     isoc_id = models.IntegerField()
-    data = models.JSONField()
+    data = models.JSONField(encoder=OrJSONSerializer, decoder=OrJSONSerializer)
 
     def __str__(self):
         return (

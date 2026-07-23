@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypedDict, Optional, Any
@@ -6,6 +5,7 @@ from uuid import uuid4, UUID
 
 import factory
 from faker import Faker
+from ixp_tracker.json import OrJSONSerializer
 from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
@@ -467,6 +467,7 @@ class MemoryEventStore(EventStorePersistence):
         self.sequence: dict[UUID, int] = {}
         self.snapshots: dict[UUID, tuple[str, int, datetime]] = {}
         self.snapshots_read: list[UUID] = []
+        self.json_serializer = OrJSONSerializer()
 
     def get_event_sequence(self, event: DomainEvent, aggregate_id: UUID) -> int:
         if self.sequence.get(aggregate_id) is None:
@@ -513,7 +514,11 @@ class MemoryEventStore(EventStorePersistence):
     def save_snapshot(
         self, aggregate_id: UUID, data: dict, sequence: int, date_now: datetime
     ):
-        self.snapshots[aggregate_id] = (json.dumps(data), sequence, date_now)
+        self.snapshots[aggregate_id] = (
+            self.json_serializer.encode(data),
+            sequence,
+            date_now,
+        )
 
     def load_snapshot(
         self,
@@ -525,7 +530,7 @@ class MemoryEventStore(EventStorePersistence):
         if snapshot is None:
             return None, None
         self.snapshots_read.append(aggregate_id)
-        return json.loads(snapshot[0]), snapshot[1]
+        return self.json_serializer.decode(snapshot[0]), snapshot[1]
 
     def has_existing_data(self, as_at: datetime) -> bool:
         existing_events = [e for e in self.events if e.event_date >= as_at]
