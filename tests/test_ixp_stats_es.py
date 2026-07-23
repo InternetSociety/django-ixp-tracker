@@ -6,9 +6,8 @@ from faker import Faker
 
 from ixp_tracker.ixp_tracker_aggregates import (
     IXPMemberJoined,
-    stringify_date,
 )
-
+from ixp_tracker.json import stringify_date
 
 from ixp_tracker.models import StatsPerIXP
 from ixp_tracker.stats import do_generate_stats

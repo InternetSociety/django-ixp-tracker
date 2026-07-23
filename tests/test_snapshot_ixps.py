@@ -4,9 +4,9 @@ from ixp_tracker.event_store import EventStore
 from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     IXP,
-    stringify_date,
     IXPMemberJoined,
 )
+from ixp_tracker.json import stringify_date
 from tests.fixtures import create_ixp, create_member, create_asn, MemoryEventStore
 
 

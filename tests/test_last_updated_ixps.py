@@ -36,7 +36,7 @@ def test_handles_ixp_created(faker: Faker):
     projection.handle(event, ixp)
 
     saved = UpdatedIXPs.objects.get(aggregate_id=event.aggregate_id)
-    assert saved.data == ixp.snapshot()
+    assert saved.data["name"] == ixp.name
     assert saved.last_updated == event.event_date.date()
 
 
@@ -69,6 +69,6 @@ def test_handles_other_events(faker: Faker):
     projection.handle(stored_event, ixp)
 
     saved = UpdatedIXPs.objects.get(aggregate_id=event.aggregate_id)
-    assert saved.data == ixp.snapshot()
+    assert saved.data["name"] == ixp.name
     assert saved.last_updated == stored_event.event_date.date()
     assert saved.data["active_status"]

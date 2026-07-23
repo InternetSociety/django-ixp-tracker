@@ -5,9 +5,9 @@ from faker import Faker
 from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     IXPMemberLeft,
-    stringify_date,
     IXPMemberJoined,
 )
+from ixp_tracker.json import stringify_date
 
 from ixp_tracker.event_store import EventStore
 

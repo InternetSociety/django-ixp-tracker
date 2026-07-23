@@ -1,11 +1,9 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 
 from ixp_tracker.event_store import DomainEvent, ValueNotChanged, Aggregate
-
-
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S%z"
+from ixp_tracker.json import dateify_string
 
 
 @dataclass
@@ -234,6 +232,12 @@ class ASN(Aggregate):
     def peering_db_id_changed(self, event: ASNPeeringDbIdChanged):
         self.peeringdb_id = event.peeringdb_id
 
+    def hydrate(self, data: dict):
+        super().hydrate(data)
+        self.network_type = NetworkType(self.network_type)
+        self.peering_policy = PeeringPolicy(self.peering_policy)
+        self.nro_status = NROStatus(self.nro_status)
+
 
 @dataclass
 class IXPMemberDetails:
@@ -271,9 +275,9 @@ class IXP(Aggregate):
         self.website = event.website
         self.active_status = event.active_status
         self.country_code = event.country_code
-        self.date_created = datetime.strptime(event.created, DATE_FORMAT)
-        self.last_updated = datetime.strptime(event.last_updated, DATE_FORMAT)
-        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
+        self.date_created = dateify_string(event.created)
+        self.last_updated = dateify_string(event.last_updated)
+        self.last_active = dateify_string(event.last_active)
         self.manrs_participant = event.manrs_participant
         self.anchor_host = event.anchor_host
         self.org_id = event.org_id
@@ -293,9 +297,9 @@ class IXP(Aggregate):
         if not isinstance(event.country_code, ValueNotChanged):
             self.country_code = event.country_code
         if not isinstance(event.created, ValueNotChanged):
-            self.date_created = datetime.strptime(event.created, DATE_FORMAT)
+            self.date_created = dateify_string(event.created)
         if not isinstance(event.last_updated, ValueNotChanged):
-            self.last_updated = datetime.strptime(event.last_updated, DATE_FORMAT)
+            self.last_updated = dateify_string(event.last_updated)
         if not isinstance(event.org_id, ValueNotChanged):
             self.org_id = event.org_id
 
@@ -315,7 +319,7 @@ class IXP(Aggregate):
         self.physical_locations = event.physical_locations
 
     def active_in_peering_db(self, event: IXPActiveInPeeringDb):
-        self.last_active = datetime.strptime(event.last_active, DATE_FORMAT)
+        self.last_active = dateify_string(event.last_active)
 
     def get_members(
         self, include_inactive: bool = False, as_at: datetime | None = None
@@ -344,9 +348,9 @@ class IXP(Aggregate):
 
     def member_joined(self, event: IXPMemberJoined):
         details = IXPMemberDetails(
-            datetime.strptime(event.date_joined, DATE_FORMAT),
-            datetime.strptime(event.date_updated, DATE_FORMAT),
-            datetime.strptime(event.last_active, DATE_FORMAT),
+            dateify_string(event.date_joined),
+            dateify_string(event.date_updated),
+            dateify_string(event.last_active),
             event.is_rs_peer,
             event.port_speed,
         )
@@ -355,55 +359,23 @@ class IXP(Aggregate):
         self.members[event.asn] = details
 
     def port_speed_updated(self, event: PortSpeedUpdated):
-        self.members[event.asn].date_updated = datetime.strptime(
-            event.date_updated, DATE_FORMAT
-        )
+        self.members[event.asn].date_updated = dateify_string(event.date_updated)
         self.members[event.asn].port_speed = event.port_speed
 
     def member_active_in_peering_db(self, event: IXPMemberActiveInPeeringDb):
-        self.members[event.asn].last_active = datetime.strptime(
-            event.last_active, DATE_FORMAT
-        )
+        self.members[event.asn].last_active = dateify_string(event.last_active)
 
     def rs_peering_status_change(self, event: RsPeeringStatusChange):
         self.members[event.asn].is_rs_peer = event.is_rs_peer
 
     def member_left(self, event: IXPMemberLeft):
-        self.members[event.asn].date_left = datetime.strptime(
-            event.date_left, DATE_FORMAT
-        )
-
-    def snapshot(self):
-        values = super().snapshot()
-        values["date_created"] = stringify_date(values["date_created"])
-        values["last_updated"] = stringify_date(values["last_updated"])
-        values["last_active"] = stringify_date(values["last_active"])
-        values["members"] = dict(values["members"])
-        for member_asn in values["members"].keys():
-            values["members"][member_asn] = self.snapshot_member_details(
-                self.members[member_asn]
-            )
-        values["member_history"] = []
-        for member_asn, details in self.member_history:
-            values["member_history"].append(
-                (member_asn, self.snapshot_member_details(details))
-            )
-        return values
-
-    def snapshot_member_details(self, details: IXPMemberDetails) -> dict[str, str]:
-        snapshot = dict(details.__dict__)
-        snapshot["date_joined"] = stringify_date(snapshot["date_joined"])
-        snapshot["date_updated"] = stringify_date(snapshot["date_updated"])
-        snapshot["last_active"] = stringify_date(snapshot["last_active"])
-        if snapshot["date_left"]:
-            snapshot["date_left"] = stringify_date(snapshot["date_left"])
-        return snapshot
+        self.members[event.asn].date_left = dateify_string(event.date_left)
 
     def hydrate(self, data: dict):
         super().hydrate(data)
-        self.date_created = datetime.strptime(data["date_created"], DATE_FORMAT)
-        self.last_updated = datetime.strptime(data["last_updated"], DATE_FORMAT)
-        self.last_active = datetime.strptime(data["last_active"], DATE_FORMAT)
+        self.date_created = dateify_string(data["date_created"])
+        self.last_updated = dateify_string(data["last_updated"])
+        self.last_active = dateify_string(data["last_active"])
         members = {}
         for member_asn in self.members.keys():
             member_details = self.members[member_asn]
@@ -418,36 +390,22 @@ class IXP(Aggregate):
     def hydrate_member_details(
         self, member_details: dict[str, str]
     ) -> IXPMemberDetails:
-        member_details["date_joined"] = datetime.strptime(  # type: ignore
-            member_details["date_joined"],  # type: ignore
-            DATE_FORMAT,
+        return IXPMemberDetails(
+            date_joined=dateify_string(member_details["date_joined"]),
+            date_updated=dateify_string(member_details["date_updated"]),
+            last_active=dateify_string(member_details["last_active"]),
+            is_rs_peer=bool(member_details["is_rs_peer"]),
+            port_speed=int(member_details["port_speed"]),
+            date_left=dateify_string(member_details["date_left"])
+            if member_details["date_left"]
+            else None,
         )
-        member_details["date_updated"] = datetime.strptime(  # type: ignore
-            member_details["date_updated"],  # type: ignore
-            DATE_FORMAT,
-        )
-        member_details["last_active"] = datetime.strptime(  # type: ignore
-            member_details["last_active"],  # type: ignore
-            DATE_FORMAT,
-        )
-        if member_details["date_left"]:  # type: ignore
-            member_details["date_left"] = datetime.strptime(  # type: ignore
-                member_details["date_left"],  # type: ignore
-                DATE_FORMAT,
-            )
-        return IXPMemberDetails(**member_details)  # type: ignore
 
 
 IXP_TRACKER_AGGREGATE_MAP = {
     "ASN": ASN,
     "IXP": IXP,
 }
-
-
-def stringify_date(date_value: datetime) -> str:
-    if date_value.tzinfo is None:
-        date_value = date_value.replace(tzinfo=timezone.utc)
-    return date_value.strftime(DATE_FORMAT)
 
 
 def is_ixp_active(active_members: list) -> bool:

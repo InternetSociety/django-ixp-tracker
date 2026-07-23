@@ -9,6 +9,7 @@ from ixp_tracker.event_store import (
 )
 import ixp_tracker.ixp_tracker_aggregates as ixpt
 from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection
+from ixp_tracker.json import stringify_date
 from ixp_tracker.models import IXPIdMap, ASNMap
 from ixp_tracker.updated_ixp_records import IXPRecord, IXPMemberRecord
 
@@ -70,9 +71,9 @@ class IXPTracker:
             website,
             active_status,
             country_code,
-            ixpt.stringify_date(created),
-            ixpt.stringify_date(last_updated),
-            ixpt.stringify_date(last_active),
+            stringify_date(created),
+            stringify_date(last_updated),
+            stringify_date(last_active),
             manrs_participant,
             anchor_host,
             org_id,
@@ -109,9 +110,9 @@ class IXPTracker:
         if country_code != ixp.country_code:
             updates["country_code"] = country_code
         if created != ixp.date_created:
-            updates["created"] = ixpt.stringify_date(created)
+            updates["created"] = stringify_date(created)
         if last_updated != ixp.last_updated:
-            updates["last_updated"] = ixpt.stringify_date(last_updated)
+            updates["last_updated"] = stringify_date(last_updated)
         if org_id != ixp.org_id:
             updates["org_id"] = org_id
         if len(updates.keys()) > 0:
@@ -132,7 +133,7 @@ class IXPTracker:
             )
             ixp = self.es.store(ixp, locations_event)
         active_event = ixpt.IXPActiveInPeeringDb(
-            last_active=ixpt.stringify_date(last_active)
+            last_active=stringify_date(last_active)
         )
         ixp = self.es.store(ixp, active_event)
         return ixp
@@ -208,16 +209,16 @@ class IXPTracker:
             )
             if member_registered_to_zz_and_has_left_already:
                 continue
-            date_updated = ixpt.stringify_date(member["updated_date"])
+            date_updated = stringify_date(member["updated_date"])
             member_has_rejoined = (
                 existing_member and existing_member.date_left is not None
             )
             if existing_member is None or member_has_rejoined:
                 join_event = ixpt.IXPMemberJoined(
                     member["asn"],
-                    ixpt.stringify_date(processing_date),
+                    stringify_date(processing_date),
                     date_updated,
-                    ixpt.stringify_date(processing_date),
+                    stringify_date(processing_date),
                     member["is_rs_peer"],
                     member["port_speed"],
                 )
@@ -234,7 +235,7 @@ class IXPTracker:
                     )
                     ixp = self.es.store(ixp, rs_peer_event)
                 active_event = ixpt.IXPMemberActiveInPeeringDb(
-                    member["asn"], ixpt.stringify_date(processing_date)
+                    member["asn"], stringify_date(processing_date)
                 )
                 ixp = self.es.store(ixp, active_event)
 
@@ -247,7 +248,7 @@ class IXPTracker:
         members_left = self.check_if_members_have_left(members, processing_date)
         for member_left in members_left:
             left_event = ixpt.IXPMemberLeft(
-                member_left[0], ixpt.stringify_date(member_left[1])
+                member_left[0], stringify_date(member_left[1])
             )
             ixp = self.es.store(ixp, left_event)
         member_asns = list(ixp.get_members().keys())
