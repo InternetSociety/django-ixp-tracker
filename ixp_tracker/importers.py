@@ -168,6 +168,8 @@ def process_ixp_data(
     event_sourcing_app: IXPTracker | None = None,
 ):
     manrs_participants = data_lookup.get_manrs_participants(processing_date)
+    # We currently rely on an external lookup that cross-references RIPE ATLAS data against PeeringDB
+    # Perhaps we could do some or all of that processing here in the future.
     anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
     ixps_added = 0
     ixps_updated = 0
