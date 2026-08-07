@@ -40,12 +40,11 @@ from ixp_tracker.ixp_tracker_projections import (
     IXPIdMapProjection,
     IXPsLastUpdatedProjection,
 )
-import ixp_tracker.models as legacy
 from ixp_tracker.models import (
-    StatsPerCountryLegacy,
-    StatsPerIXPLegacy,
     StoredEvent,
     IXPIdMap,
+    StatsPerIXP,
+    StatsPerCountry,
 )
 from ixp_tracker.json import IXPJSONEncoder, stringify_date
 
@@ -62,109 +61,13 @@ class MembershipProperties(TypedDict):
     is_rs_peer: NotRequired[bool]
 
 
-def create_member_fixture(
-    ixp,
-    asn=None,
-    quantity=1,
-    membership_properties: MembershipProperties | None = None,
-    member_properties: MemberProperties | None = None,
-):
-    created = 0
-    member = None
-    member_properties = member_properties or {}
-    membership_properties = membership_properties or {}
-    while created < quantity:
-        member_asn = asn or ASNFactory()
-        member = IXPMemberFactory(ixp=ixp, asn=member_asn, **member_properties)
-        IXPMembershipRecordFactory(member=member, **membership_properties)
-        created += 1
-    return member
-
-
-class ASNFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = legacy.ASN
-
-    name = factory.Faker("nic_handle", suffix="FAKE")
-    number = factory.Faker("random_number", digits=5)
-    peeringdb_id = factory.Faker("random_number", digits=3)
-    network_type = factory.Faker(
-        "random_element", elements=[e[0] for e in legacy.ASN.NETWORK_TYPE_CHOICES]
-    )
-    peering_policy = factory.Faker(
-        "random_element", elements=[e[0] for e in legacy.ASN.PEERING_POLICY_CHOICES]
-    )
-    registration_country_code = factory.Faker("country_code")
-    created = factory.Faker(
-        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    last_updated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
-class IXPFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = legacy.IXP
-
-    name = factory.LazyAttribute(lambda obj: f"{obj.city} - IX")
-    long_name = factory.LazyAttribute(lambda obj: f"{obj.city} Internet Exchange Point")
-    city = factory.Faker("city")
-    website = factory.Faker("url", schemes=["https"])
-    active_status = factory.Faker("pybool")
-    manrs_participant = factory.Faker("pybool")
-    anchor_host = factory.Faker("pybool")
-    physical_locations = factory.Faker("random_number", digits=2)
-    peeringdb_id = factory.Faker("random_number", digits=3)
-    org_id = factory.Faker("random_number", digits=3)
-    country_code = factory.Faker("country_code")
-    created = factory.Faker(
-        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    last_updated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-    last_active = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
-class IXPMemberFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = legacy.IXPMember
-
-    ixp = None
-    asn = None
-    last_updated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-    last_active = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
-class IXPMembershipRecordFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = legacy.IXPMembershipRecord
-
-    member = None
-    start_date = factory.Faker(
-        "date_time_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    is_rs_peer = factory.Faker("pybool")
-    speed = factory.Faker("random_number", digits=6)
-    end_date = None
-
-
 class PeeringASNFactory(factory.DictFactory):
     id = factory.Faker("random_number", digits=3)
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
-    info_type = factory.Faker(
-        "random_element", elements=[e[1] for e in legacy.ASN.NETWORK_TYPE_CHOICES]
-    )
+    info_type = factory.Faker("random_element", elements=[e.value for e in NetworkType])
     policy_general = factory.Faker(
-        "random_element", elements=[e[1] for e in legacy.ASN.PEERING_POLICY_CHOICES]
+        "random_element", elements=[e.value for e in PeeringPolicy]
     )
     created = factory.LazyAttribute(
         lambda obj: obj.created_date.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -228,39 +131,6 @@ class PeeringNetIXLANFactory(factory.DictFactory):
         )
 
 
-class StatsPerIXPLegacyFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = StatsPerIXPLegacy
-
-    ixp = None
-    stats_date = factory.Faker(
-        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    capacity = factory.Faker("random_number", digits=5)
-    members = factory.Faker("random_number", digits=3)
-    local_asns_members_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    local_routed_asns_members_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    local_routed_asns_members_customers_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    rs_peering_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    members_joined_last_12_months = factory.Faker("random_number", digits=2)
-    members_left_last_12_months = factory.Faker("random_number", digits=2)
-    monthly_members_change = factory.Faker("random_number", digits=2)
-    monthly_members_change_percent = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    last_generated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
 class MockLookup(AdditionalDataSources):
     def __init__(
         self,
@@ -304,39 +174,9 @@ class MockLookup(AdditionalDataSources):
         return self.anchor_hosts
 
 
-class StatsPerCountryLegacyFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = StatsPerCountryLegacy
-
-    country_code = factory.Faker("country_code")
-    stats_date = factory.Faker(
-        "date_between", start_date="-1y", end_date="-4w", tzinfo=timezone.utc
-    )
-    ixp_count = factory.Faker("random_int", max=200)
-    asn_count = factory.Faker("random_int", max=1000)
-    routed_asn_count = factory.Faker("random_int", max=800)
-    member_count = factory.Faker("random_int", max=500)
-    asns_ixp_member_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    routed_asns_ixp_member_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    routed_asns_ixp_member_customers_rate = factory.Faker(
-        "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
-    )
-    total_capacity = factory.Faker("random_number", digits=5)
-    last_generated = factory.Faker(
-        "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
-    )
-
-
-# Fixtures for event sourcing
-
-
 class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = legacy.StatsPerIXP
+        model = StatsPerIXP
 
     ixp = None
     stats_date = factory.Faker(
@@ -366,7 +206,7 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
 
 class StatsPerCountryFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = legacy.StatsPerCountry
+        model = StatsPerCountry
 
     country_code = factory.Faker("country_code")
     stats_date = factory.Faker(

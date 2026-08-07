@@ -1,14 +1,17 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
-from ixp_tracker.importers import ASNGeoLookup, process_member_data
-from ixp_tracker.models import IXPMember, IXPMembershipRecord
+from ixp_tracker.event_store import DjangoEventStore
+from ixp_tracker.importers import process_member_data
+from ixp_tracker.ixp_tracker_aggregates import IXP
 from tests.fixtures import (
-    ASNFactory,
-    IXPFactory,
     PeeringNetIXLANFactory,
-    create_member_fixture,
+    MockLookup,
+    create_ixp,
+    create_asn,
+    create_member,
+    build_app,
 )
 
 pytestmark = pytest.mark.django_db
@@ -16,265 +19,103 @@ pytestmark = pytest.mark.django_db
 date_now = datetime.now(timezone.utc)
 
 
-class TestLookup(ASNGeoLookup):
-    __test__ = False
+def test_adds_new_members(faker):
+    app, es = build_app()
+    app.time_travel(date_now)
 
-    def __init__(self, default_status: str = "assigned"):
-        self.default_status = default_status
+    ixp = create_ixp(faker, es)
+    asn_one = create_asn(faker, es)
+    asn_two = create_asn(faker, es)
+    member_import_one = PeeringNetIXLANFactory(
+        asn=asn_one.number, ix_id=ixp.peeringdb_id
+    )
+    member_import_two = PeeringNetIXLANFactory(
+        asn=asn_two.number, ix_id=ixp.peeringdb_id
+    )
 
-    def get_iso2_country(self, asn: int, as_at: datetime) -> str:
-        return "US"
+    process_member_data(
+        [member_import_one, member_import_two], date_now, MockLookup(), app
+    )
 
-    def get_status(self, asn: int, as_at: datetime) -> str:
-        assert as_at <= datetime.now(timezone.utc)
-        assert asn > 0
-        return self.default_status
-
-
-def test_with_no_data_does_nothing():
-    process_member_data([], date_now, TestLookup())
-
-    members = IXPMember.objects.all()
-    assert len(members) == 0
-
-
-def test_adds_new_member():
-    ixp = IXPFactory()
-    asn = ASNFactory()
-    member_import = PeeringNetIXLANFactory(asn=asn.number, ix_id=ixp.peeringdb_id)
-
-    process_member_data([member_import], date_now, TestLookup())
-
-    members = IXPMember.objects.all()
-    assert len(members) == 1
-    current_membership = IXPMembershipRecord.objects.filter(member=members.first())
-    assert len(current_membership) == 1
+    ixp = es.get_aggregate(ixp.id, IXP)
+    members = ixp.get_members()
+    assert len(members) == 2
+    assert asn_one.number in members.keys()
+    assert asn_two.number in members.keys()
 
 
-def test_does_nothing_if_no_asn_found():
-    ixp = IXPFactory()
+def test_does_nothing_if_no_asn_found(faker):
+    des = DjangoEventStore()
+    app, es = build_app(des)
+    app.time_travel(date_now)
+
+    ixp = create_ixp(faker, es)
     member_import = PeeringNetIXLANFactory(ix_id=ixp.peeringdb_id)
+    fixture_events = len(des.get_events())
 
-    process_member_data([member_import], date_now, TestLookup())
+    process_member_data([member_import], date_now, MockLookup(), app)
 
-    members = IXPMember.objects.all()
-    assert len(members) == 0
+    assert len(des.get_events()) == fixture_events
 
 
-def test_does_nothing_if_no_ixp_found():
-    asn = ASNFactory()
+def test_does_nothing_if_no_ixp_found(faker):
+    des = DjangoEventStore()
+    app, es = build_app(des)
+    app.time_travel(date_now)
+
+    asn = create_asn(faker, es)
     member_import = PeeringNetIXLANFactory(asn=asn.number)
+    fixture_events = len(des.get_events())
 
-    process_member_data([member_import], date_now, TestLookup())
+    app, _ = build_app()
+    process_member_data([member_import], date_now, MockLookup(), app)
 
-    members = IXPMember.objects.all()
-    assert len(members) == 0
+    assert len(des.get_events()) == fixture_events
 
 
-def test_updates_existing_member():
-    ixp = IXPFactory()
-    member = create_member_fixture(ixp)
+def test_updates_member(faker):
+    app, es = build_app()
+    app.time_travel(date_now)
+
+    ixp = create_ixp(faker, es)
+    asn = create_asn(faker, es)
+    create_member(faker, es, ixp, asn, {"speed": 500, "is_rs_peer": False})
     member_import = PeeringNetIXLANFactory(
-        asn=member.asn.number, ix_id=ixp.peeringdb_id
+        asn=asn.number, ix_id=ixp.peeringdb_id, speed=10000, is_rs_peer=True
     )
+    last_active = ixp.get_members().get(asn.number).last_active
 
-    process_member_data([member_import], date_now, TestLookup())
+    process_member_data([member_import], date_now, MockLookup(), app)
 
-    members = IXPMember.objects.all()
-    assert len(members) == 1
-    updated = members.first()
-    assert updated.last_active > member.last_active
-
-
-def test_updates_membership_for_existing_member():
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp, membership_properties={"speed": 500, "is_rs_peer": False}
-    )
-    member_import = PeeringNetIXLANFactory(
-        asn=member.asn.number, ix_id=ixp.peeringdb_id, speed=10000, is_rs_peer=True
-    )
-
-    process_member_data([member_import], date_now, TestLookup())
-
-    membership = IXPMembershipRecord.objects.filter(member=member)
-    assert len(membership) == 1
-    current_membership = membership.first()
-    assert current_membership.is_rs_peer
-    assert current_membership.speed == 10000
+    ixp = es.get_aggregate(ixp.id, IXP)
+    updated = ixp.get_members().get(asn.number)
+    assert updated.is_rs_peer
+    assert updated.port_speed == 10000
+    assert updated.last_active > last_active
 
 
-def test_adds_new_membership_for_existing_member_marked_as_left():
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp,
-        membership_properties={
-            "start_date": datetime(year=2018, month=1, day=3),
-            "end_date": datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
-        },
-    )
-    member_import = PeeringNetIXLANFactory(
-        asn=member.asn.number, ix_id=ixp.peeringdb_id
-    )
+def test_marks_members_left_if_ixp_not_referenced_in_import(faker):
+    app, es = build_app()
+    app.time_travel(date_now)
 
-    process_member_data([member_import], date_now, TestLookup())
+    ixp = create_ixp(faker, es, True)
+    # Create 3 existing members
+    for member_count in range(1, 4):
+        asn = create_asn(faker, es)
+        create_member(
+            faker,
+            es,
+            ixp,
+            asn,
+            {"last_active": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc)},
+        )
+    assert ixp.active_status is True
 
-    members = IXPMember.objects.all()
-    assert len(members) == 1
-    current_membership = IXPMembershipRecord.objects.filter(member=member).order_by(
-        "-start_date"
-    )
-    assert len(current_membership) == 2
-    assert current_membership.first().end_date is None
+    process_member_data([], date_now, MockLookup(), app)
 
-
-def test_extends_membership_for_member_marked_as_left_if_created_before_date_left():
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp,
-        membership_properties={
-            "start_date": datetime(year=2018, month=1, day=3),
-            "end_date": datetime(year=2018, month=7, day=13, tzinfo=timezone.utc),
-        },
-    )
-    member_data_with_created_date_before_date_left = PeeringNetIXLANFactory(
-        asn=member.asn.number,
-        ix_id=ixp.peeringdb_id,
-        created_date=datetime(year=2018, month=6, day=18, tzinfo=timezone.utc),
-    )
-
-    process_member_data(
-        [member_data_with_created_date_before_date_left], date_now, TestLookup()
-    )
-
-    members = IXPMember.objects.all()
-    assert len(members) == 1
-    current_membership = IXPMembershipRecord.objects.filter(member=member).order_by(
-        "-start_date"
-    )
-    assert len(current_membership) == 1
-    assert current_membership.first().end_date is None
-
-
-def test_marks_member_as_left_that_is_no_longer_active():
-    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
-    last_day_of_last_month = first_day_of_month - timedelta(days=1)
-    date_more_than_month_ago = last_day_of_last_month - timedelta(days=17)
-
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp,
-        membership_properties={"start_date": date_more_than_month_ago},
-        member_properties={"last_active": date_more_than_month_ago},
-    )
-
-    current_membership = IXPMembershipRecord.objects.filter(member=member)
-    assert current_membership.first().end_date is None
-
-    process_member_data([], date_now, TestLookup())
-
-    current_membership = IXPMembershipRecord.objects.filter(member=member)
-    assert current_membership.first().end_date.strftime(
-        "%Y-%m-%d"
-    ) == last_day_of_last_month.strftime("%Y-%m-%d")
-
-
-def test_does_not_mark_member_as_left_if_asn_is_registered_in_country_zz_and_is_assigned():
-    asn = ASNFactory(registration_country_code="ZZ")
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp, asn, member_properties={"last_active": datetime.now(timezone.utc)}
-    )
-
-    process_member_data([], date_now, TestLookup(default_status="assigned"))
-
-    current_membership = IXPMembershipRecord.objects.filter(member=member)
-    assert current_membership.first().end_date is None
-
-
-def test_marks_member_as_left_if_asn_is_registered_in_country_zz_and_is_not_assigned():
-    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
-    last_day_of_last_month = first_day_of_month - timedelta(days=1)
-
-    asn = ASNFactory(registration_country_code="ZZ")
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp, asn, member_properties={"last_active": datetime.now(timezone.utc)}
-    )
-
-    process_member_data([], date_now, TestLookup("available"))
-
-    current_membership = IXPMembershipRecord.objects.filter(member=member)
-    assert current_membership.first().end_date.strftime(
-        "%Y-%m-%d"
-    ) == last_day_of_last_month.strftime("%Y-%m-%d")
-
-
-def test_does_not_mark_as_left_before_joining_date():
-    first_day_of_month = datetime.now(timezone.utc).replace(day=1)
-
-    asn = ASNFactory(registration_country_code="ZZ")
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp,
-        asn,
-        member_properties={"last_active": datetime.now(timezone.utc)},
-        membership_properties={"start_date": first_day_of_month},
-    )
-
-    process_member_data([], date_now, TestLookup("available"))
-
-    current_membership = IXPMembershipRecord.objects.filter(member=member)
-    assert current_membership.first().end_date.strftime(
-        "%Y-%m-%d"
-    ) == first_day_of_month.strftime("%Y-%m-%d")
-
-
-def test_ensure_multiple_member_entries_does_not_trigger_multiple_new_memberships():
-    ixp = IXPFactory()
-    member = create_member_fixture(
-        ixp,
-        membership_properties={
-            "start_date": datetime(year=2023, month=1, day=13, tzinfo=timezone.utc),
-            "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
-        },
-    )
-
-    date_after_date_left = datetime(2023, 9, 24, tzinfo=timezone.utc)
-    member_data_with_created_date_after_date_left = PeeringNetIXLANFactory(
-        created_date=date_after_date_left, ix_id=ixp.peeringdb_id, asn=member.asn.number
-    )
-
-    process_member_data(
-        [
-            member_data_with_created_date_after_date_left,
-            member_data_with_created_date_after_date_left,
-        ],
-        date_now,
-        TestLookup(),
-    )
-
-    memberships = IXPMembershipRecord.objects.filter(member=member)
-    assert len(memberships) == 2
-
-
-def test_do_not_add_new_membership_for_same_created_date():
-    ixp = IXPFactory()
-    created_date = datetime(year=2023, month=1, day=13, tzinfo=timezone.utc)
-    member = create_member_fixture(
-        ixp,
-        membership_properties={
-            "start_date": created_date,
-            "end_date": datetime(year=2023, month=7, day=13, tzinfo=timezone.utc),
-        },
-    )
-    # As we always create a new membership record if the most recent one has ended, for multiple ASN-IX combos this
-    # could result in multiple new memberships being created
-    member_import = PeeringNetIXLANFactory(
-        created_date=created_date, ix_id=ixp.peeringdb_id, asn=member.asn.number
-    )
-
-    process_member_data([member_import], date_now, TestLookup())
-
-    memberships = IXPMembershipRecord.objects.filter(member=member)
-    assert len(memberships) == 1
+    ixp = es.get_aggregate(ixp.id, IXP)
+    active_members = ixp.get_members()
+    assert len(active_members) == 0
+    all_members = ixp.get_members(True)
+    assert len(all_members) == 3
+    assert ixp.active_status is False
