@@ -65,6 +65,7 @@ class PeeringASNFactory(factory.DictFactory):
     id = factory.Faker("random_number", digits=3)
     asn = factory.Faker("random_number", digits=5)
     name = factory.Faker("nic_handle", suffix="FAKE")
+    org_id = factory.Faker("random_number", digits=3)
     info_type = factory.Faker("random_element", elements=[e.value for e in NetworkType])
     policy_general = factory.Faker(
         "random_element", elements=[e.value for e in PeeringPolicy]
@@ -394,6 +395,7 @@ def create_ixp_event(
     created_date: datetime | None = None,
     country_code: str | None = None,
     peeringdb_id: int | None = None,
+    org_network_status: bool | None = None,
 ):
     city = faker.city()
     name = f"{city} - IX"
@@ -413,6 +415,7 @@ def create_ixp_event(
         ),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
         stringify_date(faker.date_time_between(start_date="-1d", tzinfo=timezone.utc)),
+        org_network_status or org_network_status is None,
         False,
         False,
         faker.random_number(digits=3),
@@ -427,9 +430,12 @@ def create_ixp(
     created_date: datetime | None = None,
     country_code: str | None = None,
     peeringdb_id: int | None = None,
+    org_network_status: bool | None = None,
 ) -> IXP:
     ixp = IXP(id=uuid4())
-    event = create_ixp_event(faker, created_date, country_code, peeringdb_id)
+    event = create_ixp_event(
+        faker, created_date, country_code, peeringdb_id, org_network_status
+    )
     ixp = es.store(ixp, event)
     if active_status:
         ixp = es.store(ixp, IXPBecameActive())

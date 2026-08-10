@@ -189,6 +189,26 @@ def test_marks_ixp_active_if_has_three_members(
     assert ixp.active_status is True
 
 
+def test_does_not_mark_ixp_active_if_has_three_members_but_org_network_status_false(
+    faker,
+):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    app.time_travel(date_now)
+
+    ixp = create_ixp(faker, es, org_network_status=False)
+    member_import_data = []
+    for _ in range(1, 4):
+        asn = create_asn(faker, es)
+        member_import_data.append(create_member_import_data(faker, asn.number))
+
+    assert ixp.active_status is False
+
+    ixp = app.import_members(ixp, member_import_data, date_now)
+
+    assert ixp.active_status is False
+
+
 def test_marks_ixp_inactive_if_members_drops_below_three(
     faker,
 ):

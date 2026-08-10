@@ -46,5 +46,5 @@ repos:
         - id: mypy
           exclude: |
               (?x)^(
-                  .*/migrations/0001_initial.py
+                  .*/migrations/.*\.py
               )$

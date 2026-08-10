@@ -18,6 +18,7 @@ class IXPCreated(DomainEvent):
     created: str
     last_updated: str
     last_active: str
+    org_network_active: bool
     manrs_participant: bool
     anchor_host: bool
     org_id: int
@@ -39,6 +40,12 @@ class IXPUpdated(DomainEvent):
 @dataclass
 class ManrsStatusChange(DomainEvent):
     manrs_participant: bool
+
+
+@dataclass
+class OrgNetworkStatusChange(DomainEvent):
+    org_network_active: bool
+    active_status: bool
 
 
 @dataclass()
@@ -156,6 +163,7 @@ IXP_TRACKER_EVENT_MAP = {
     IXPMemberActiveInPeeringDb.__name__: IXPMemberActiveInPeeringDb,
     IXPMemberJoined.__name__: IXPMemberJoined,
     IXPMemberLeft.__name__: IXPMemberLeft,
+    OrgNetworkStatusChange.__name__: OrgNetworkStatusChange,
     PhysicalLocationChange.__name__: PhysicalLocationChange,
     PortSpeedUpdated.__name__: PortSpeedUpdated,
     RsPeeringStatusChange.__name__: RsPeeringStatusChange,
@@ -187,6 +195,7 @@ class PeeringPolicy(Enum):
 
 
 class NROStatus(Enum):
+    ALLOCATED = "allocated"
     ASSIGNED = "assigned"
     AVAILABLE = "available"
     IANAPOOL = "ianapool"
@@ -260,6 +269,7 @@ class IXP(Aggregate):
     date_created: datetime
     last_updated: datetime
     last_active: datetime
+    org_network_active: bool
     manrs_participant: bool = False
     anchor_host: bool = False
     org_id: int
@@ -278,6 +288,7 @@ class IXP(Aggregate):
         self.date_created = dateify_string(event.created)
         self.last_updated = dateify_string(event.last_updated)
         self.last_active = dateify_string(event.last_active)
+        self.org_network_active = event.org_network_active
         self.manrs_participant = event.manrs_participant
         self.anchor_host = event.anchor_host
         self.org_id = event.org_id
@@ -311,6 +322,10 @@ class IXP(Aggregate):
 
     def manrs_status_change(self, event: ManrsStatusChange):
         self.manrs_participant = event.manrs_participant
+
+    def org_network_status_change(self, event: OrgNetworkStatusChange):
+        self.org_network_active = event.org_network_active
+        self.active_status = event.active_status
 
     def anchor_host_change(self, event: AnchorHostChange):
         self.anchor_host = event.anchor_host

@@ -25,6 +25,7 @@ def test_registers_ixp(faker: Faker):
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        True,
         False,
         False,
         faker.random_number(digits=3),
@@ -61,6 +62,7 @@ def test_updates_main_ixp_details(faker):
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         ixp.manrs_participant,
         ixp.anchor_host,
         faker.random_number(digits=3),
@@ -88,6 +90,7 @@ def test_does_not_update_fields_if_not_changed(faker):
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         False,
         False,
         ixp.org_id,
@@ -123,6 +126,7 @@ def test_always_updates_last_active(faker):
         ixp.date_created,
         ixp.last_updated,
         processing_date,
+        ixp.org_network_active,
         False,
         False,
         ixp.org_id,
@@ -151,6 +155,7 @@ def test_registers_change_in_manrs_status(faker):
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         True,
         False,
         ixp.org_id,
@@ -178,6 +183,7 @@ def test_registers_change_in_anchor_host(faker):
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         ixp.manrs_participant,
         True,
         ixp.org_id,
@@ -205,6 +211,7 @@ def test_registers_change_in_location_count_if_both_values_exist(faker):
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         ixp.manrs_participant,
         ixp.anchor_host,
         ixp.org_id,
@@ -233,6 +240,7 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
         ixp.date_created,
         ixp.last_updated,
         faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        ixp.org_network_active,
         ixp.manrs_participant,
         ixp.anchor_host,
         ixp.org_id,
@@ -244,3 +252,171 @@ def test_registers_no_change_in_location_count_if_new_value_is_none(faker):
     assert event_created.event_type == "IXPCreated"
     assert last_active.event_type == "IXPActiveInPeeringDb"
     assert ixp.physical_locations == original_value
+
+
+def test_assigns_org_network_status_false(faker: Faker):
+    app, _ = build_app()
+
+    city = faker.city()
+    name = f"{city} - IX"
+    long_name = f"{city} Internet Exchange Point"
+    peeringdb_id = faker.random_number(digits=3)
+    ixp = app.import_ixp(
+        name,
+        long_name,
+        city,
+        peeringdb_id,
+        faker.url(schemes=["https"]),
+        faker.country_code(),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        False,
+        False,
+        False,
+        faker.random_number(digits=3),
+        faker.random_number(digits=2),
+    )
+
+    assert not ixp.org_network_active
+
+
+def test_assigns_org_network_status_true_if_no_data(faker: Faker):
+    app, _ = build_app()
+
+    city = faker.city()
+    name = f"{city} - IX"
+    long_name = f"{city} Internet Exchange Point"
+    peeringdb_id = faker.random_number(digits=3)
+    ixp = app.import_ixp(
+        name,
+        long_name,
+        city,
+        peeringdb_id,
+        faker.url(schemes=["https"]),
+        faker.country_code(),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        None,
+        False,
+        False,
+        faker.random_number(digits=3),
+        faker.random_number(digits=2),
+    )
+
+    assert ixp.org_network_active
+
+
+def test_org_network_status_becomes_inactive(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es, org_network_status=True, active_status=True)
+
+    ixp = app.import_ixp(
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.peeringdb_id,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        False,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        ixp.org_id,
+        ixp.physical_locations,
+    )
+
+    [_event_created, _became_active, org_network_status_update, _last_active] = (
+        mes.events
+    )
+
+    assert org_network_status_update.event_type == "OrgNetworkStatusChange"
+    assert not ixp.org_network_active
+    assert not ixp.active_status
+
+
+def test_org_network_status_becomes_active(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es, org_network_status=False, active_status=False)
+
+    ixp = app.import_ixp(
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.peeringdb_id,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        True,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        ixp.org_id,
+        ixp.physical_locations,
+    )
+
+    [_event_created, org_network_status_update, _last_active] = mes.events
+
+    assert org_network_status_update.event_type == "OrgNetworkStatusChange"
+    assert ixp.org_network_active
+    assert ixp.active_status
+
+
+def test_no_org_network_status_remains_active(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es, org_network_status=True)
+
+    ixp = app.import_ixp(
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.peeringdb_id,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        None,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        ixp.org_id,
+        ixp.physical_locations,
+    )
+
+    assert len(mes.events) == 2
+
+    assert ixp.org_network_active
+
+
+def test_no_org_network_status_remains_inactive(faker):
+    mes = MemoryEventStore()
+    app, es = build_app(mes)
+    ixp = create_ixp(faker, es, org_network_status=False)
+
+    ixp = app.import_ixp(
+        ixp.name,
+        ixp.long_name,
+        ixp.city,
+        ixp.peeringdb_id,
+        ixp.website,
+        ixp.country_code,
+        ixp.date_created,
+        ixp.last_updated,
+        faker.date_time_between(start_date="-1d", tzinfo=timezone.utc),
+        None,
+        ixp.manrs_participant,
+        ixp.anchor_host,
+        ixp.org_id,
+        ixp.physical_locations,
+    )
+
+    assert len(mes.events) == 2
+
+    assert not ixp.org_network_active

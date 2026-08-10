@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 from django_countries import countries
 
+from ixp_tracker.check_org_networks import check_org_networks
 from ixp_tracker.conf import (
     DATA_ARCHIVE_URL,
     IXP_TRACKER_LOCAL_DATA_ARCHIVE_PATH,
@@ -61,8 +62,13 @@ def import_data(
         all_pdb_data = get_archived_data(processing_date, local_archive_path)
     es_app = build_app(processing_date)
     ixp_data = all_pdb_data.get("ix", {"data": []}).get("data", [])
-    process_ixp_data(ixp_data, processing_date, additional_data, es_app)
     asn_data = all_pdb_data.get("net", {"data": []}).get("data", [])
+    org_network_checks = check_org_networks(
+        ixp_data, asn_data, additional_data, processing_date
+    )
+    process_ixp_data(
+        ixp_data, processing_date, additional_data, es_app, org_network_checks
+    )
     # This is an optimisation to improve import performance. Peering DB list of networks contains about 2x the number of networks in the member list
     # So, fo now, we choose only to import the ASN data referenced in the member data
     member_data = all_pdb_data.get("netixlan", {"data": []}).get("data", [])
@@ -156,6 +162,7 @@ def process_ixp_data(
     processing_date: datetime,
     data_lookup: AdditionalDataSources,
     event_sourcing_app: IXPTracker,
+    org_network_checks: dict[int, bool | None],
 ):
     manrs_participants = data_lookup.get_manrs_participants(processing_date)
     # We currently rely on an external lookup that cross-references RIPE ATLAS data against PeeringDB
@@ -194,6 +201,7 @@ def process_ixp_data(
                 date_created,
                 last_updated,
                 processing_date,
+                org_network_checks.get(peeringdb_id),
                 ixp_data["id"] in manrs_participants,
                 ixp_data["id"] in anchor_hosts,
                 int(ixp_data["org_id"]),

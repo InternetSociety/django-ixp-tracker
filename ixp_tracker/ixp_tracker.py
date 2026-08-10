@@ -8,6 +8,7 @@ from ixp_tracker.event_store import (
     AggregateNotFound,
 )
 import ixp_tracker.ixp_tracker_aggregates as ixpt
+from ixp_tracker.ixp_tracker_aggregates import NROStatus
 from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection
 from ixp_tracker.json import stringify_date
 from ixp_tracker.models import IXPIdMap, ASNMap
@@ -39,6 +40,7 @@ class IXPTracker:
         created: datetime,
         last_updated: datetime,
         last_active: datetime,
+        org_network_active: bool | None,
         manrs_participant: bool,
         anchor_host: bool,
         org_id: int,
@@ -56,6 +58,7 @@ class IXPTracker:
                 created,
                 last_updated,
                 last_active,
+                org_network_active,
                 org_id,
                 manrs_participant,
                 anchor_host,
@@ -74,6 +77,8 @@ class IXPTracker:
             stringify_date(created),
             stringify_date(last_updated),
             stringify_date(last_active),
+            # If there is no org network data we mark as active for now
+            org_network_active or org_network_active is None,
             manrs_participant,
             anchor_host,
             org_id,
@@ -93,6 +98,7 @@ class IXPTracker:
         created: datetime,
         last_updated: datetime,
         last_active: datetime,
+        org_network_active: bool | None,
         org_id: int,
         manrs_participant: bool,
         anchor_host: bool,
@@ -132,6 +138,16 @@ class IXPTracker:
                 physical_locations=physical_locations
             )
             ixp = self.es.store(ixp, locations_event)
+        # If there is no org network data then we keep the previous org network active status
+        if (
+            org_network_active is not None
+            and ixp.org_network_active != org_network_active
+        ):
+            org_network_status_update = ixpt.OrgNetworkStatusChange(
+                org_network_active=org_network_active,
+                active_status=org_network_active,
+            )
+            ixp = self.es.store(ixp, org_network_status_update)
         active_event = ixpt.IXPActiveInPeeringDb(
             last_active=stringify_date(last_active)
         )
@@ -205,7 +221,10 @@ class IXPTracker:
             member_registered_to_zz_and_has_left_already = (
                 existing_member
                 and existing_member.date_left is not None
-                and as_zz_country_check(as_entity)
+                and as_zz_country_check(
+                    as_entity.number, as_entity.country_code, as_entity.nro_status
+                )
+                is False
             )
             if member_registered_to_zz_and_has_left_already:
                 continue
@@ -252,7 +271,14 @@ class IXPTracker:
             )
             ixp = self.es.store(ixp, left_event)
         member_asns = list(ixp.get_members().keys())
-        if ixp.active_status is False and ixpt.is_ixp_active(member_asns):
+        # We only reactivate an IXP on member count if the org network status is active.
+        # Otherwise an IXP that has been marked inactive due to the org network status could be re-activated even though the
+        # org network status is still False. (In these scenarios there may still be active members listed in PDB)
+        if (
+            ixp.active_status is False
+            and ixp.org_network_active
+            and ixpt.is_ixp_active(member_asns)
+        ):
             active_event = ixpt.IXPBecameActive()
             ixp = self.es.store(ixp, active_event)
         elif ixp.active_status is True and not ixpt.is_ixp_active(member_asns):
@@ -368,7 +394,11 @@ class IXPTracker:
                 members_left.append((member_asn, end_of_month))
             as_entity = self.get_asn(member_asn, as_at=processing_date)
             if member.date_left is None and (
-                as_entity is None or as_zz_country_check(as_entity)
+                as_entity is None
+                or as_zz_country_check(
+                    as_entity.number, as_entity.country_code, as_entity.nro_status
+                )
+                is False
             ):
                 end_of_last_month_active = member.last_active.replace(
                     day=1
@@ -377,16 +407,16 @@ class IXPTracker:
         return members_left
 
 
-def as_zz_country_check(asn: ixpt.ASN) -> bool:
+def as_zz_country_check(asn: int, country_code: str, nro_status: NROStatus) -> bool:
     # AS112 is a special case, see https://www.as112.net). It's marked as registered to country ZZ in NRO so we ignore it here
-    if asn.number == 112:
-        return False
-    if asn.country_code != "ZZ":
-        return False
-    if asn.nro_status == ixpt.NROStatus.ASSIGNED:
+    if asn == 112:
+        return True
+    if country_code != "ZZ":
+        return True
+    if nro_status == ixpt.NROStatus.ASSIGNED:
         logger.warning(
             "AS registered to ZZ and marked as assigned",
-            extra={"asn": asn.number},
+            extra={"asn": asn},
         )
-        return False
-    return True
+        return True
+    return False
