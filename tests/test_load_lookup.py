@@ -1,6 +1,9 @@
 import pytest
 
-from ixp_tracker.management.commands.ixp_tracker_import import DefaultAdditionalDataSources, load_lookup
+from ixp_tracker.management.commands.ixp_tracker_import import (
+    DefaultAdditionalDataSources,
+    load_lookup,
+)
 
 
 def test_with_no_name_returns_none():

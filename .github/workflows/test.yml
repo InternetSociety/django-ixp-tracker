@@ -23,6 +23,8 @@ jobs:
     - name: Install dependencies
       run: |
         pip install '.[test]'
+    - name: Run pre-commit
+      run: pre-commit run --all-files
     - name: Run tests
       run: |
         pytest

@@ -4,33 +4,35 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0005_statspercountry_statsperixp_and_more'),
+        ("ixp_tracker", "0005_statspercountry_statsperixp_and_more"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='statspercountry',
-            name='ixp_tracker_unique_per_country_stats',
+            model_name="statspercountry",
+            name="ixp_tracker_unique_per_country_stats",
         ),
         migrations.RenameField(
-            model_name='asn',
-            old_name='registration_country',
-            new_name='registration_country_code',
+            model_name="asn",
+            old_name="registration_country",
+            new_name="registration_country_code",
         ),
         migrations.RenameField(
-            model_name='ixp',
-            old_name='country',
-            new_name='country_code',
+            model_name="ixp",
+            old_name="country",
+            new_name="country_code",
         ),
         migrations.RenameField(
-            model_name='statspercountry',
-            old_name='country',
-            new_name='country_code',
+            model_name="statspercountry",
+            old_name="country",
+            new_name="country_code",
         ),
         migrations.AddConstraint(
-            model_name='statspercountry',
-            constraint=models.UniqueConstraint(fields=('country_code', 'stats_date'), name='ixp_tracker_unique_per_country_stats'),
+            model_name="statspercountry",
+            constraint=models.UniqueConstraint(
+                fields=("country_code", "stats_date"),
+                name="ixp_tracker_unique_per_country_stats",
+            ),
         ),
     ]

@@ -5,15 +5,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0008_alter_asn_id_alter_ixp_id_alter_ixpmember_id_and_more'),
+        ("ixp_tracker", "0008_alter_asn_id_alter_ixp_id_alter_ixpmember_id_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='ixpmembershiprecord',
-            name='member',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='ixp_tracker.ixpmember'),
+            model_name="ixpmembershiprecord",
+            name="member",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="memberships",
+                to="ixp_tracker.ixpmember",
+            ),
         ),
     ]

@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0016_statspercountry_routed_asns_ixp_member_customers_rate_and_more'),
+        (
+            "ixp_tracker",
+            "0016_statspercountry_routed_asns_ixp_member_customers_rate_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ixp',
-            name='org_id',
+            model_name="ixp",
+            name="org_id",
             field=models.IntegerField(null=True),
         ),
     ]

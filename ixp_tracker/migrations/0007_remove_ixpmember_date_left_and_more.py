@@ -5,41 +5,57 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0006_remove_statspercountry_ixp_tracker_unique_per_country_stats_and_more'),
+        (
+            "ixp_tracker",
+            "0006_remove_statspercountry_ixp_tracker_unique_per_country_stats_and_more",
+        ),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='ixpmember',
-            name='date_left',
+            model_name="ixpmember",
+            name="date_left",
         ),
         migrations.RemoveField(
-            model_name='ixpmember',
-            name='is_rs_peer',
+            model_name="ixpmember",
+            name="is_rs_peer",
         ),
         migrations.RemoveField(
-            model_name='ixpmember',
-            name='member_since',
+            model_name="ixpmember",
+            name="member_since",
         ),
         migrations.RemoveField(
-            model_name='ixpmember',
-            name='speed',
+            model_name="ixpmember",
+            name="speed",
         ),
         migrations.CreateModel(
-            name='IXPMembershipRecord',
+            name="IXPMembershipRecord",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('start_date', models.DateField()),
-                ('is_rs_peer', models.BooleanField(default=False)),
-                ('speed', models.IntegerField(null=True)),
-                ('end_date', models.DateField(null=True)),
-                ('member', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='ixp_tracker.ixpmember')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("start_date", models.DateField()),
+                ("is_rs_peer", models.BooleanField(default=False)),
+                ("speed", models.IntegerField(null=True)),
+                ("end_date", models.DateField(null=True)),
+                (
+                    "member",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="ixp_tracker.ixpmember",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'IXP Membership record',
-                'verbose_name_plural': 'IXP Membership records',
+                "verbose_name": "IXP Membership record",
+                "verbose_name_plural": "IXP Membership records",
             },
         ),
     ]

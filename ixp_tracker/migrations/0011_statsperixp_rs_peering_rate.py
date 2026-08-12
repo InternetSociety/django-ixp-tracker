@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0010_statspercountry_ixp_count'),
+        ("ixp_tracker", "0010_statspercountry_ixp_count"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statsperixp',
-            name='rs_peering_rate',
+            model_name="statsperixp",
+            name="rs_peering_rate",
             field=models.FloatField(default=None),
         ),
     ]

@@ -4,35 +4,43 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='IXP',
+            name="IXP",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=150)),
-                ('long_name', models.CharField(max_length=200)),
-                ('city', models.CharField(max_length=200)),
-                ('website', models.URLField(null=True)),
-                ('active_status', models.BooleanField(default=True)),
-                ('peeringdb_id', models.IntegerField(null=True)),
-                ('country', models.CharField(max_length=2)),
-                ('created', models.DateTimeField()),
-                ('last_updated', models.DateTimeField()),
-                ('last_active', models.DateTimeField(null=True)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=150)),
+                ("long_name", models.CharField(max_length=200)),
+                ("city", models.CharField(max_length=200)),
+                ("website", models.URLField(null=True)),
+                ("active_status", models.BooleanField(default=True)),
+                ("peeringdb_id", models.IntegerField(null=True)),
+                ("country", models.CharField(max_length=2)),
+                ("created", models.DateTimeField()),
+                ("last_updated", models.DateTimeField()),
+                ("last_active", models.DateTimeField(null=True)),
             ],
             options={
-                'verbose_name': 'Internet Exchange Point',
-                'verbose_name_plural': 'Internet Exchange Points',
+                "verbose_name": "Internet Exchange Point",
+                "verbose_name_plural": "Internet Exchange Points",
             },
         ),
         migrations.AddConstraint(
-            model_name='ixp',
-            constraint=models.UniqueConstraint(fields=('peeringdb_id',), name='ixp_tracker_unique_ixp_peeringdb_id'),
+            model_name="ixp",
+            constraint=models.UniqueConstraint(
+                fields=("peeringdb_id",), name="ixp_tracker_unique_ixp_peeringdb_id"
+            ),
         ),
     ]

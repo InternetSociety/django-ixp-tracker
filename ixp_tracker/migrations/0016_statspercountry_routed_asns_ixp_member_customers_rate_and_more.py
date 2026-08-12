@@ -4,44 +4,71 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0015_statsperixp_monthly_members_change_and_more'),
+        ("ixp_tracker", "0015_statsperixp_monthly_members_change_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statspercountry',
-            name='routed_asns_ixp_member_customers_rate',
+            model_name="statspercountry",
+            name="routed_asns_ixp_member_customers_rate",
             field=models.FloatField(default=0),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='local_routed_asns_members_customers_rate',
+            model_name="statsperixp",
+            name="local_routed_asns_members_customers_rate",
             field=models.FloatField(default=0),
             preserve_default=False,
         ),
         migrations.AlterField(
-            model_name='statspercountry',
-            name='routed_asn_count',
+            model_name="statspercountry",
+            name="routed_asn_count",
             field=models.IntegerField(default=0),
             preserve_default=False,
         ),
         migrations.AlterField(
-            model_name='statspercountry',
-            name='routed_asns_ixp_member_rate',
+            model_name="statspercountry",
+            name="routed_asns_ixp_member_rate",
             field=models.FloatField(default=0),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='asn',
-            name='peering_policy',
-            field=models.CharField(choices=[('open', 'Open'), ('selective', 'Selective'), ('restrictive', 'Restrictive'), ('no', 'No'), ('unknown', 'Unknown')], default='unknown', max_length=50),
+            model_name="asn",
+            name="peering_policy",
+            field=models.CharField(
+                choices=[
+                    ("open", "Open"),
+                    ("selective", "Selective"),
+                    ("restrictive", "Restrictive"),
+                    ("no", "No"),
+                    ("unknown", "Unknown"),
+                ],
+                default="unknown",
+                max_length=50,
+            ),
         ),
         migrations.AlterField(
-            model_name='asn',
-            name='network_type',
-            field=models.CharField(choices=[('nsp', 'NSP'), ('content', 'Content'), ('cable-dsl-isp', 'Cable/DSL/ISP'), ('enterprise', 'Enterprise'), ('education-research', 'Educational/Research'), ('non-profit', 'Non-Profit'), ('route-server', 'Route Server'), ('network-services', 'Network Services'), ('route-collector', 'Route Collector'), ('government', 'Government'), ('not-disclosed', 'Not Disclosed'), ('other', 'Other'), ('unknown', 'Unknown')], default='unknown', max_length=200),
+            model_name="asn",
+            name="network_type",
+            field=models.CharField(
+                choices=[
+                    ("nsp", "NSP"),
+                    ("content", "Content"),
+                    ("cable-dsl-isp", "Cable/DSL/ISP"),
+                    ("enterprise", "Enterprise"),
+                    ("education-research", "Educational/Research"),
+                    ("non-profit", "Non-Profit"),
+                    ("route-server", "Route Server"),
+                    ("network-services", "Network Services"),
+                    ("route-collector", "Route Collector"),
+                    ("government", "Government"),
+                    ("not-disclosed", "Not Disclosed"),
+                    ("other", "Other"),
+                    ("unknown", "Unknown"),
+                ],
+                default="unknown",
+                max_length=200,
+            ),
         ),
     ]

@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0012_statspercountry_routed_asn_count_and_more'),
+        ("ixp_tracker", "0012_statspercountry_routed_asn_count_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ixp',
-            name='manrs_participant',
+            model_name="ixp",
+            name="manrs_participant",
             field=models.BooleanField(default=False),
         ),
     ]

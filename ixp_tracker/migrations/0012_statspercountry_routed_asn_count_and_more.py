@@ -4,30 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0011_statsperixp_rs_peering_rate'),
+        ("ixp_tracker", "0011_statsperixp_rs_peering_rate"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statspercountry',
-            name='routed_asn_count',
+            model_name="statspercountry",
+            name="routed_asn_count",
             field=models.IntegerField(default=None, null=True),
         ),
         migrations.AddField(
-            model_name='statspercountry',
-            name='routed_asns_ixp_member_rate',
+            model_name="statspercountry",
+            name="routed_asns_ixp_member_rate",
             field=models.FloatField(default=None, null=True),
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='local_routed_asns_members_rate',
+            model_name="statsperixp",
+            name="local_routed_asns_members_rate",
             field=models.FloatField(default=None, null=True),
         ),
         migrations.AlterField(
-            model_name='statsperixp',
-            name='rs_peering_rate',
+            model_name="statsperixp",
+            name="rs_peering_rate",
             field=models.FloatField(default=None, null=True),
         ),
     ]

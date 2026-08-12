@@ -4,21 +4,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0014_statsperixp_members_joined_last_12_months_and_more'),
+        ("ixp_tracker", "0014_statsperixp_members_joined_last_12_months_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_members_change',
+            model_name="statsperixp",
+            name="monthly_members_change",
             field=models.IntegerField(default=0),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_members_change_percent',
+            model_name="statsperixp",
+            name="monthly_members_change_percent",
             field=models.FloatField(default=0),
             preserve_default=False,
         ),

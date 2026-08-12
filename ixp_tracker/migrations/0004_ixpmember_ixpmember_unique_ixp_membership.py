@@ -5,32 +5,53 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0003_alter_asn_name'),
+        ("ixp_tracker", "0003_alter_asn_name"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='IXPMember',
+            name="IXPMember",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('member_since', models.DateField()),
-                ('last_updated', models.DateTimeField()),
-                ('is_rs_peer', models.BooleanField(default=False)),
-                ('speed', models.IntegerField(null=True)),
-                ('date_left', models.DateField(null=True)),
-                ('last_active', models.DateTimeField(null=True)),
-                ('asn', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='ixp_tracker.asn')),
-                ('ixp', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='ixp_tracker.ixp')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("member_since", models.DateField()),
+                ("last_updated", models.DateTimeField()),
+                ("is_rs_peer", models.BooleanField(default=False)),
+                ("speed", models.IntegerField(null=True)),
+                ("date_left", models.DateField(null=True)),
+                ("last_active", models.DateTimeField(null=True)),
+                (
+                    "asn",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="ixp_tracker.asn",
+                    ),
+                ),
+                (
+                    "ixp",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="ixp_tracker.ixp",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'IXP Member',
-                'verbose_name_plural': 'IXP Members',
+                "verbose_name": "IXP Member",
+                "verbose_name_plural": "IXP Members",
             },
         ),
         migrations.AddConstraint(
-            model_name='ixpmember',
-            constraint=models.UniqueConstraint(fields=('ixp', 'asn'), name='ixp_tracker_unique_ixp_membership'),
+            model_name="ixpmember",
+            constraint=models.UniqueConstraint(
+                fields=("ixp", "asn"), name="ixp_tracker_unique_ixp_membership"
+            ),
         ),
     ]

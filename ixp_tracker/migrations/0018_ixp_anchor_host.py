@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0017_ixp_org_id'),
+        ("ixp_tracker", "0017_ixp_org_id"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ixp',
-            name='anchor_host',
+            model_name="ixp",
+            name="anchor_host",
             field=models.BooleanField(default=False),
         ),
     ]

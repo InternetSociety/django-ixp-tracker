@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0019_statspercountry_last_generated_and_more'),
+        ("ixp_tracker", "0019_statspercountry_last_generated_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ixp',
-            name='physical_locations',
+            model_name="ixp",
+            name="physical_locations",
             field=models.IntegerField(default=0),
         ),
     ]

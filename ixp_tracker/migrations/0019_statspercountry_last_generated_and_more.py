@@ -5,22 +5,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0018_ixp_anchor_host'),
+        ("ixp_tracker", "0018_ixp_anchor_host"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statspercountry',
-            name='last_generated',
-            field=models.DateTimeField(default=datetime.datetime.now(datetime.timezone.utc)),
+            model_name="statspercountry",
+            name="last_generated",
+            field=models.DateTimeField(
+                default=datetime.datetime.now(datetime.timezone.utc)
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='last_generated',
-            field=models.DateTimeField(default=datetime.datetime.now(datetime.timezone.utc)),
+            model_name="statsperixp",
+            name="last_generated",
+            field=models.DateTimeField(
+                default=datetime.datetime.now(datetime.timezone.utc)
+            ),
             preserve_default=False,
         ),
     ]

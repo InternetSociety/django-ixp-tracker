@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0002_asn_asn_unique_as_number'),
+        ("ixp_tracker", "0002_asn_asn_unique_as_number"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='asn',
-            name='name',
+            model_name="asn",
+            name="name",
             field=models.CharField(max_length=500),
         ),
     ]
