@@ -1,6 +1,9 @@
 # Changelog
 
-## 3.0.0
+## 3.0.1
+- adds missing migration
+
+## 3.0.0 - YANKED
 - remove legacy implementation - this will delete all the old models from the db. You might want to backup your db before installing this version.
 - add check on status of org networks in NRO as an extra way of detecting inactive IXPs
 - add custom JSON encoding to avoid need to custom snapshot logic

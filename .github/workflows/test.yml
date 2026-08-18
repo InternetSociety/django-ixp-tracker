@@ -25,6 +25,8 @@ jobs:
         pip install '.[test]'
     - name: Run pre-commit
       run: pre-commit run --all-files
+    - name: Check for missing migrations
+      run: python manage.py makemigrations --check
     - name: Run tests
       run: |
         pytest
