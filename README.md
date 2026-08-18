@@ -7,6 +7,10 @@
 
 Library to retrieve and manipulate data about IXPs
 
+## v3 warning
+
+v3 completely removes the legacy v1 implementation and hence will delete all the old models from the db. You might want to backup your db before installing this version.
+
 ## v2 warning
 
 Note the v2 is a complete rewrite to use [Event Sourcing](docs/event-sourcing-rewrite.md). The first time you upgrade you will need to re-run any historical data you have as the history is not migrated between major versions.
@@ -22,7 +26,7 @@ SELECT setval(pg_get_serial_sequence('ixp_tracker_ixpidmap', 'id')
 FROM   ixp_tracker_ixpidmap;
 ```
 
-The legacy implementation is preserved in v2 for now but will be removed in a future minor version. If you would like to upgrade to v2 but continue with the legacy implementation be sure to set `IXP_TRACKER_ENABLE_EVENT_SOURCING` to `False`. Note that there are no changes to the legacy implementation in v2 though.
+The legacy implementation is preserved in v2 but is removed in v3. If you would like to upgrade to v2 but continue with the legacy implementation be sure to set `IXP_TRACKER_ENABLE_EVENT_SOURCING` to `False`. Note that there are no changes to the legacy implementation in v2 though.
 
 ## Installation
 

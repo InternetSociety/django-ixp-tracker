@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0
+- remove legacy implementation - this will delete all the old models from the db. You might want to backup your db before installing this version.
+- add check on status of org networks in NRO as an extra way of detecting inactive IXPs
+- add custom JSON encoding to avoid need to custom snapshot logic
+- add `py-typed` marker file
+
 ## 2.0.0
 - a complete internal rewrite to use an event-sourced architecture (see [rewrite ADR](docs/event-sourcing-rewrite.md) for more detail on the reasons behind this)
 - removed logic to try and infer IXP membership for ASNs
