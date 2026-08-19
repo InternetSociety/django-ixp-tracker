@@ -438,7 +438,7 @@ def create_ixp(
     )
     ixp = es.store(ixp, event)
     if active_status:
-        ixp = es.store(ixp, IXPBecameActive())
+        ixp = es.store(ixp, IXPBecameActive(True))
     return ixp
 
 

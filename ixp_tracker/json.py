@@ -1,5 +1,5 @@
 import dataclasses
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from enum import Enum
 from json import JSONEncoder
 
@@ -12,6 +12,8 @@ class IXPJSONEncoder(JSONEncoder):
             return o.value
         if isinstance(o, datetime):
             return stringify_date(o)
+        if isinstance(o, date):
+            return str(o)
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)

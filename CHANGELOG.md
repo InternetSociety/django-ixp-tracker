@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.1.0
+- change last updated projection to decorate ASNs to improve performance of `IXPTracker.fetch_updated_ixp_records`. Note the projection needs rebuilding to make this work.
+
 ## 3.0.1
 - adds missing migration
 

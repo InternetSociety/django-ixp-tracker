@@ -1,4 +1,5 @@
-from datetime import timedelta, timezone, date, datetime
+import re
+from datetime import timedelta, timezone, datetime
 from statistics import median
 
 import pytest
@@ -59,7 +60,9 @@ def test_returns_ixp_updated_on_cut_off(faker: Faker):
     app, es = build_app()
     es.time_travel(test_cut_off)
     ixp = create_ixp(faker, es, created_date=test_cut_off)
-    create_member(faker, es, ixp, create_asn(faker, es))
+    create_member(
+        faker, es, ixp, create_asn(faker, es), {"start_date": before_cut_off_date}
+    )
     app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
@@ -180,9 +183,9 @@ def test_ensure_we_return_date_not_datetime(faker: Faker):
 
     assert len(records) == 1
     ixp_record = records[0]
-    assert isinstance(ixp_record["last_updated"], date)
-    assert not isinstance(ixp_record["last_updated"], datetime)
+    date_match = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    assert ixp_record["last_updated"] and date_match.match(ixp_record["last_updated"])
 
     member = ixp_record["members"][0]
-    assert isinstance(member["member_since"], date)
+    assert date_match.match(member["member_since"])
     assert not isinstance(member["member_since"], datetime)

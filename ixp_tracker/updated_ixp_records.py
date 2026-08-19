@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Optional, TypedDict
 
 
@@ -12,7 +11,7 @@ class ASNRecord(TypedDict):
 
 class IXPMemberRecord(TypedDict):
     asn: ASNRecord
-    member_since: date
+    member_since: str
     speed: int
     is_rs_peer: bool
 
@@ -24,7 +23,7 @@ class IXPRecord(TypedDict):
     country: str
     city: str
     website: str
-    last_updated: Optional[date]
+    last_updated: Optional[str]
     members: list[IXPMemberRecord]
     peering_id: int
     active: bool

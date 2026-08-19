@@ -5,10 +5,12 @@ from django.core.management import BaseCommand
 
 from ixp_tracker.data_lookup import load_lookup
 from ixp_tracker.event_store import Projection, EventStore, DjangoEventStore
+from ixp_tracker.importers import build_app
 from ixp_tracker.ixp_tracker_aggregates import (
     IXP_TRACKER_EVENT_MAP,
     IXP_TRACKER_AGGREGATE_MAP,
 )
+from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection
 
 logger = logging.getLogger("ixp_tracker")
 
@@ -34,10 +36,14 @@ class Command(BaseCommand):
             if len(projection_names) == 0:
                 logging.error("Projection names are empty")
                 return
-            projections = [
-                load_lookup(f"ixp_tracker.ixp_tracker_projections.{p}")
-                for p in projection_names
-            ]
+            projections = []
+
+            for p in projection_names:
+                if p == "IXPsLastUpdatedProjection":
+                    app = build_app()
+                    projections.append(IXPsLastUpdatedProjection(app))
+                else:
+                    load_lookup(f"ixp_tracker.ixp_tracker_projections.{p}")
             projections = [
                 p for p in projections if issubclass(p.__class__, Projection)
             ]
