@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
@@ -18,6 +19,9 @@ from ixp_tracker.models import (
     IXPIdMap,
     UpdatedIXPs,
 )
+from ixp_tracker.updated_ixp_records import IXPMemberRecord, IXPRecord
+
+logger = logging.getLogger("ixp_tracker")
 
 
 class ASNList(Projection):
@@ -97,7 +101,7 @@ class IXPsLastUpdatedProjection(Projection):
             self.events.append(event_type)
         super().__init__()
         self.id_map = IXPIdMapProjection()
-        self.ixps_to_update: dict[UUID, tuple[int, dict, date]] = {}
+        self.ixps_to_update: dict[UUID, tuple[int, dict, datetime]] = {}
         self.app = app
 
     def do_handle(self, event: StoredEvent, ixp: Aggregate):
@@ -109,7 +113,9 @@ class IXPsLastUpdatedProjection(Projection):
         # Rather than updating the projection here we store the IXP so we can update once per import (in finalise())
         # This also overwrites anything we've previously stored for this IXP so we only update based on the latest state
         # it also means that, given we're storing the event date, we can handle multiple "imports" (i.e. rebuilding the projection from scratch)
-        self.ixps_to_update[ixp.id] = (ids.pk, ixp.snapshot(), event.event_date.date())
+        snapshot = ixp.snapshot()
+        snapshot["members"] = ixp.get_members(as_at=event.event_date)
+        self.ixps_to_update[ixp.id] = (ids.pk, snapshot, event.event_date)
 
     def ixps_updated_since(
         self, since: date | None, count: int, first_id: int
@@ -122,12 +128,53 @@ class IXPsLastUpdatedProjection(Projection):
     def finalise(self):
         for aggregate_id in self.ixps_to_update.keys():
             isoc_id, snapshot, event_date = self.ixps_to_update[aggregate_id]
+            member_records: list[IXPMemberRecord] = []
+            members = snapshot["members"]
+            for member_asn in members.keys():
+                member = members[member_asn]
+                asn = self.app.get_asn(member_asn, event_date)
+                if asn:
+                    member_records.append(
+                        {
+                            "member_since": member.date_joined.date(),
+                            "speed": member.port_speed,
+                            "is_rs_peer": member.is_rs_peer,
+                            "asn": {
+                                "holder_name": asn.name,
+                                "asn": asn.number,
+                                "network_type": asn.network_type.value,
+                                "registration_country": asn.country_code,
+                                "peering_policy": asn.peering_policy.value,
+                            },
+                        }
+                    )
+                else:
+                    logger.warning(
+                        "ASN not found", extra={"asn": member_asn, "ixp": aggregate_id}
+                    )
+            ixp_data: IXPRecord = {
+                "isoc_id": isoc_id,
+                "name": snapshot["name"],
+                "long_name": snapshot["long_name"],
+                "country": snapshot["country_code"],
+                "city": snapshot["city"],
+                "website": snapshot["website"],
+                "last_updated": snapshot["last_updated"].date()
+                if snapshot["last_updated"] is not None
+                else None,
+                "members": member_records,
+                "peering_id": snapshot["peeringdb_id"],
+                "active": snapshot["active_status"],
+                "manrs_participant": snapshot["manrs_participant"],
+                "anchor_host": snapshot["anchor_host"],
+                "physical_locations": snapshot["physical_locations"] or 0,
+            }
             UpdatedIXPs.objects.update_or_create(
                 aggregate_id=aggregate_id,
                 isoc_id=isoc_id,
                 defaults={
-                    "last_updated": event_date,
-                    "data": snapshot,
+                    "last_updated": event_date.date(),
+                    "data": ixp_data,
                 },
             )
 
