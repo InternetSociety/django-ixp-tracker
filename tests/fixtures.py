@@ -383,10 +383,10 @@ def build_app(
     es_db: EventStorePersistence | None = None,
 ) -> tuple[IXPTracker, EventStore]:
     es = EventStore(IXP_TRACKER_EVENT_MAP, es_db or DjangoEventStore())
+    app = IXPTracker(es)
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
-    es.add_listener(IXPsLastUpdatedProjection())
-    app = IXPTracker(es)
+    es.add_listener(IXPsLastUpdatedProjection(app))
     return app, es
 
 

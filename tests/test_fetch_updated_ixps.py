@@ -24,6 +24,8 @@ test_cut_off_date = test_cut_off.date()
 
 def test_with_no_ixps_returns_nothing():
     app, es = build_app()
+    app.finalise()
+
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 
     assert len(records) == 0
@@ -33,6 +35,7 @@ def test_does_not_return_ixp_updated_before_cut_off(faker: Faker):
     app, es = build_app()
     es.time_travel(before_cut_off_date)
     create_ixp(faker, es, created_date=before_cut_off_date)
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 
@@ -43,6 +46,7 @@ def test_returns_ixp_updated_after_cut_off(faker: Faker):
     app, es = build_app()
     ixp = create_ixp(faker, es, created_date=after_cut_off_date)
     create_member(faker, es, ixp, create_asn(faker, es))
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 
@@ -56,6 +60,7 @@ def test_returns_ixp_updated_on_cut_off(faker: Faker):
     es.time_travel(test_cut_off)
     ixp = create_ixp(faker, es, created_date=test_cut_off)
     create_member(faker, es, ixp, create_asn(faker, es))
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 
@@ -74,6 +79,7 @@ def test_returns_ixp_with_member_marked_ended_after_cut_off(faker: Faker):
         create_asn(faker, es),
         {"start_date": before_cut_off_date, "end_date": after_cut_off_date},
     )
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 
@@ -95,6 +101,7 @@ def test_with_no_updated_date_returns_count_ixps(faker: Faker):
     create_ixp(
         faker, es, peeringdb_id=peeringdb_ids.pop(), created_date=before_cut_off_date
     )
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(None, 2)
 
@@ -114,6 +121,7 @@ def test_with_offset_returns_records_with_that_id_or_greater(faker: Faker):
         )
         isoc_ids.append(app.find_isoc_id(ixp.id) or 0)
     last_id = max(isoc_ids)
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(None, first_id=last_id)
 
@@ -134,6 +142,7 @@ def test_with_count_and_offset_returns_requested_slice_of_records(faker: Faker):
         )
         isoc_ids.append(app.find_isoc_id(ixp.id) or 0)
     middle_id = int(median(isoc_ids))
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(None, 1, middle_id)
 
@@ -154,6 +163,7 @@ def test_with_offset_after_last_id_returns_nothing(faker: Faker):
         )
         isoc_ids.append(app.find_isoc_id(ixp.id) or 0)
     last_id = max(isoc_ids)
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(None, first_id=(last_id + 1))
 
@@ -164,6 +174,7 @@ def test_ensure_we_return_date_not_datetime(faker: Faker):
     app, es = build_app()
     ixp = create_ixp(faker, es, created_date=after_cut_off_date)
     create_member(faker, es, ixp, create_asn(faker, es))
+    app.finalise()
 
     records = app.fetch_updated_ixp_records(test_cut_off_date)
 

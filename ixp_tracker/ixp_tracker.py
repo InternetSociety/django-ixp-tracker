@@ -9,7 +9,7 @@ from ixp_tracker.event_store import (
 )
 import ixp_tracker.ixp_tracker_aggregates as ixpt
 from ixp_tracker.ixp_tracker_aggregates import NROStatus
-from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection
+from ixp_tracker.ixp_tracker_projections import IXPsLastUpdatedProjection, ASNLookup
 from ixp_tracker.json import stringify_date
 from ixp_tracker.models import IXPIdMap, ASNMap
 from ixp_tracker.updated_ixp_records import IXPRecord, IXPMemberRecord
@@ -25,7 +25,7 @@ class MemberImportData(TypedDict):
     port_speed: int
 
 
-class IXPTracker:
+class IXPTracker(ASNLookup):
     def __init__(self, es: EventStore):
         self.es = es
 
@@ -318,13 +318,16 @@ class IXPTracker:
     def time_travel(self, date_in_past: datetime):
         self.es.time_travel(date_in_past)
 
+    def finalise(self):
+        self.es.finalise()
+
     def fetch_updated_ixp_records(
         self,
         since_date: date | None = None,
         count: int = 200,
         first_id: int = 0,
     ) -> list[IXPRecord]:
-        projection = IXPsLastUpdatedProjection()
+        projection = IXPsLastUpdatedProjection(self)
         updated_ixps = projection.ixps_updated_since(since_date, count, first_id)
         ixp_records: list[IXPRecord] = []
         logger.debug("Fetching IXPs")

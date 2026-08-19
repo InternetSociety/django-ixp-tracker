@@ -94,6 +94,10 @@ class Projection(ABC):
     def reset(self):
         pass
 
+    # This is a no-op but can be overridden in individual projections as required
+    def finalise(self):
+        pass
+
 
 class EventStorePersistence(ABC):
     @abstractmethod
@@ -278,7 +282,12 @@ class EventStore:
                 for handler in handlers:
                     handler.handle(event, aggregate)
             start += chunk_size
+        self.finalise()
         return
+
+    def finalise(self):
+        for listener in self.listeners:
+            listener.finalise()
 
 
 class DjangoEventStore(EventStorePersistence):

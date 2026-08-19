@@ -1,4 +1,6 @@
-from datetime import date
+from datetime import date, datetime
+from typing import Protocol
+from uuid import UUID
 
 from ixp_tracker.event_store import Projection, Aggregate
 from ixp_tracker.ixp_tracker_aggregates import (
@@ -72,10 +74,15 @@ class IXPIdMapProjection(Projection):
             raise RuntimeError("You must reset IXPIdMapProjection manually")
 
 
+class ASNLookup(Protocol):
+    def get_asn(self, asn, as_at: datetime | None = None) -> ASN | None:
+        pass
+
+
 class IXPsLastUpdatedProjection(Projection):
     aggregate_types = [IXP.__name__]
 
-    def __init__(self):
+    def __init__(self, app: ASNLookup):
         self.events = []
         # We need to make sure we handle any IXP events that make changes so this feels like the most reliable way to do that
         for event_type in IXP_TRACKER_EVENT_MAP.keys():
@@ -90,6 +97,8 @@ class IXPsLastUpdatedProjection(Projection):
             self.events.append(event_type)
         super().__init__()
         self.id_map = IXPIdMapProjection()
+        self.ixps_to_update: dict[UUID, tuple[int, dict, date]] = {}
+        self.app = app
 
     def do_handle(self, event: StoredEvent, ixp: Aggregate):
         if not isinstance(ixp, IXP):
@@ -97,14 +106,10 @@ class IXPsLastUpdatedProjection(Projection):
         ids = self.id_map.find_by_peeringdb_id(ixp.peeringdb_id)
         if ids is None:
             return
-        UpdatedIXPs.objects.update_or_create(
-            aggregate_id=ixp.id,
-            isoc_id=ids.id,
-            defaults={
-                "last_updated": event.event_date.date(),
-                "data": ixp.snapshot(),
-            },
-        )
+        # Rather than updating the projection here we store the IXP so we can update once per import (in finalise())
+        # This also overwrites anything we've previously stored for this IXP so we only update based on the latest state
+        # it also means that, given we're storing the event date, we can handle multiple "imports" (i.e. rebuilding the projection from scratch)
+        self.ixps_to_update[ixp.id] = (ids.pk, ixp.snapshot(), event.event_date.date())
 
     def ixps_updated_since(
         self, since: date | None, count: int, first_id: int
@@ -113,6 +118,18 @@ class IXPsLastUpdatedProjection(Projection):
         if since:
             updated = updated.filter(last_updated__gte=since)
         return list(updated.all()[:count])
+
+    def finalise(self):
+        for aggregate_id in self.ixps_to_update.keys():
+            isoc_id, snapshot, event_date = self.ixps_to_update[aggregate_id]
+            UpdatedIXPs.objects.update_or_create(
+                aggregate_id=aggregate_id,
+                isoc_id=isoc_id,
+                defaults={
+                    "last_updated": event_date,
+                    "data": snapshot,
+                },
+            )
 
     def reset(self):
         UpdatedIXPs.objects.all().delete()

@@ -76,6 +76,7 @@ def import_data(
     filtered_asn_data = [a for a in asn_data if a["asn"] in member_asns]
     process_asn_data(filtered_asn_data, processing_date, additional_data, es_app)
     process_member_data(member_data, processing_date, additional_data, es_app)
+    es_app.finalise()
     logger.debug("Toggled IXPs active status")
 
 
@@ -86,10 +87,10 @@ def build_app(
     if import_date and persistence.has_existing_data(import_date):
         raise DataAlreadyImported
     es = EventStore(IXP_TRACKER_EVENT_MAP, persistence)
+    app = IXPTracker(es)
     es.add_listener(IXPIdMapProjection())
     es.add_listener(ASNList())
-    es.add_listener(IXPsLastUpdatedProjection())
-    app = IXPTracker(es)
+    es.add_listener(IXPsLastUpdatedProjection(app))
     if import_date:
         # We always set the time travel so the monthly stats can run safely for the first of each month,
         # and we set the time elements to zero to ensure we always get all events for that date
