@@ -1,15 +1,15 @@
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Iterable, List, TypedDict, Union
+from typing import TypedDict
 
 from django_countries import countries
 
-from ixp_tracker.ixp_tracker import IXPTracker
-
 from ixp_tracker.importers import AdditionalDataSources, build_app
+from ixp_tracker.ixp_tracker import IXPTracker
 from ixp_tracker.models import (
-    StatsPerIXP,
     StatsPerCountry,
+    StatsPerIXP,
 )
 
 logger = logging.getLogger("ixp_tracker")
@@ -17,8 +17,8 @@ logger = logging.getLogger("ixp_tracker")
 
 class CountryStats(TypedDict):
     ixp_count: int
-    all_asns: Union[List[int], None]
-    routed_asns: Union[List[int], None]
+    all_asns: list[int] | None
+    routed_asns: list[int] | None
     member_asns: set[int]
     member_and_customer_asns: set[int]
     total_capacity: int
@@ -43,7 +43,7 @@ def do_generate_stats(
     date_now = datetime.now(timezone.utc)
     date_12_months_ago = stats_date.replace(year=(stats_date.year - 1))
     date_last_month = (stats_date - timedelta(days=1)).replace(day=1)
-    all_stats_per_country: Dict[str, CountryStats] = {}
+    all_stats_per_country: dict[str, CountryStats] = {}
     for code, _ in list(countries):
         all_stats_per_country[code] = {
             "ixp_count": 0,
@@ -63,6 +63,7 @@ def do_generate_stats(
         member_count = len(member_asns)
         total_capacity = sum([m.port_speed for m in members.values()])
         rs_peers = [m.is_rs_peer for m in members.values() if m.is_rs_peer]
+        rs_peers_asns = [m for m in members if members[m].is_rs_peer]
         rs_peering_rate = (len(rs_peers) / member_count) if member_count > 0 else 0
         country_routed_asns = lookup.get_routed_asns_for_country(
             ixp.country_code, stats_date
@@ -83,6 +84,15 @@ def do_generate_stats(
             asn for asn in member_asns if asn not in member_asns_12_months_ago
         ]
         members_last_month = ixp.get_members(as_at=date_last_month)
+        rs_peers_asns_last_month = [
+            m for m in members_last_month if members_last_month[m].is_rs_peer
+        ]
+        rs_peered_members = [
+            m for m in rs_peers_asns if m not in rs_peers_asns_last_month
+        ]
+        rs_depeered_members = [
+            m for m in rs_peers_asns_last_month if m not in rs_peers_asns
+        ]
         num_members_last_month = len(members_last_month.keys())
         growth_members = member_count - num_members_last_month
         StatsPerIXP.objects.update_or_create(
@@ -100,6 +110,12 @@ def do_generate_stats(
                 "monthly_members_change_percent": calculate_growth_members_percent(
                     growth_members, num_members_last_month
                 ),
+                "monthly_rs_peered_members_count": len(rs_peered_members),
+                "monthly_rs_depeered_members_count": len(rs_depeered_members),
+                "monthly_rs_peered_members": {"rs_peered_members": rs_peered_members},
+                "monthly_rs_depeered_members": {
+                    "rs_depeered_members": rs_depeered_members
+                },
                 "last_generated": date_now,
             },
         )
@@ -161,7 +177,7 @@ def calculate_growth_members_percent(
 
 
 def calculate_local_asns_members_rate(
-    member_asns: Iterable[int], country_asns: List[int]
+    member_asns: Iterable[int], country_asns: list[int]
 ) -> float:
     if len(country_asns) == 0:
         return 0
