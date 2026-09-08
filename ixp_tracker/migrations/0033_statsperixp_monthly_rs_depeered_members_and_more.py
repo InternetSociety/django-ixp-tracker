@@ -4,30 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ixp_tracker', '0032_remove_asn_ixp_tracker_unique_as_number_and_more'),
+        ("ixp_tracker", "0032_remove_asn_ixp_tracker_unique_as_number_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_rs_depeered_members',
+            model_name="statsperixp",
+            name="monthly_rs_depeered_members",
             field=models.JSONField(null=True),
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_rs_depeered_members_count',
+            model_name="statsperixp",
+            name="monthly_rs_depeered_members_count",
             field=models.IntegerField(null=True),
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_rs_peered_members',
+            model_name="statsperixp",
+            name="monthly_rs_peered_members",
             field=models.JSONField(null=True),
         ),
         migrations.AddField(
-            model_name='statsperixp',
-            name='monthly_rs_peered_members_count',
+            model_name="statsperixp",
+            name="monthly_rs_peered_members_count",
             field=models.IntegerField(null=True),
         ),
     ]
