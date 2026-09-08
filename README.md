@@ -63,7 +63,7 @@ In order to implement such a component yourself, you should implement the Protoc
 
 You have the option of backfilling data from archived PeeringDb data. This can be done by running the import command with the `--backfill` option for each month you want to backfill:
 ```shell
-python manage.py ixp_tracker_import --backfill <YYYMM>
+python manage.py ixp_tracker_import --backfill <YYYYMM>
 ```
 The backfill currently process a single month at a time and will look for the earliest file for the relevant month at https://publicdata.caida.org/datasets/peeringdb/
 
