@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TypedDict, Any
+from typing import Any, TypedDict
 
 from requests import Session
 from requests.adapters import HTTPAdapter
