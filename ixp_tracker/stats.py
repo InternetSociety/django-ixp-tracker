@@ -55,15 +55,21 @@ def do_generate_stats(
         }
     # Ensure we load the state of all IXPs as they were on the stats date
     ixps = es_app.get_all_ixps(stats_date)
+    ixps_last_month = es_app.get_all_ixps(date_last_month)
     for ixp in ixps:
         # We always save the stats per IXP after their created date so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         isoc_id = es_app.find_isoc_id(ixp.id)
+        try:
+            ixp_last_month = next(i for i in ixps_last_month if i.id == ixp.id)
+        except StopIteration:
+            ixp_last_month = None
         members = ixp.get_members()
+        members_last_month = ixp_last_month.get_members() if ixp_last_month else {}
         member_asns = list(members.keys())
+        member_last_month_asns = list(members_last_month.keys())
         member_count = len(member_asns)
         total_capacity = sum([m.port_speed for m in members.values()])
-        rs_peers = [m.is_rs_peer for m in members.values() if m.is_rs_peer]
-        rs_peers_asns = [m for m in members if members[m].is_rs_peer]
+        rs_peers = [m for m in members if members[m].is_rs_peer]
         rs_peering_rate = (len(rs_peers) / member_count) if member_count > 0 else 0
         country_routed_asns = lookup.get_routed_asns_for_country(
             ixp.country_code, stats_date
@@ -83,16 +89,11 @@ def do_generate_stats(
         members_joined_in_last_12_months = [
             asn for asn in member_asns if asn not in member_asns_12_months_ago
         ]
-        members_last_month = ixp.get_members(as_at=date_last_month)
-        rs_peers_asns_last_month = [
+        rs_peers_last_month = [
             m for m in members_last_month if members_last_month[m].is_rs_peer
         ]
-        rs_peered_members = [
-            m for m in rs_peers_asns if m not in rs_peers_asns_last_month
-        ]
-        rs_depeered_members = [
-            m for m in rs_peers_asns_last_month if m not in rs_peers_asns
-        ]
+        rs_peered_members = [m for m in rs_peers if m not in rs_peers_last_month]
+        rs_depeered_members = [m for m in rs_peers_last_month if m not in rs_peers]
         num_members_last_month = len(members_last_month.keys())
         growth_members = member_count - num_members_last_month
         StatsPerIXP.objects.update_or_create(
@@ -112,10 +113,8 @@ def do_generate_stats(
                 ),
                 "monthly_rs_peered_members_count": len(rs_peered_members),
                 "monthly_rs_depeered_members_count": len(rs_depeered_members),
-                "monthly_rs_peered_members": {"rs_peered_members": rs_peered_members},
-                "monthly_rs_depeered_members": {
-                    "rs_depeered_members": rs_depeered_members
-                },
+                "monthly_rs_peered_members": rs_peered_members,
+                "monthly_rs_depeered_members": rs_depeered_members,
                 "last_generated": date_now,
             },
         )

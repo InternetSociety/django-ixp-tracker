@@ -3,21 +3,19 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from faker import Faker
 
-
-from ixp_tracker.ixp_tracker_aggregates import IXPMemberJoined
+from ixp_tracker.ixp_tracker_aggregates import IXPMemberJoined, RsPeeringStatusChange
 from ixp_tracker.json import stringify_date
-
 from ixp_tracker.models import StatsPerIXP
 from ixp_tracker.stats import do_generate_stats
 from tests.fixtures import (
-    MockLookup,
     MemoryEventStore,
-    create_ixp,
-    create_asn,
-    create_member,
+    MockLookup,
+    PeeringASNFactory,
     StatsPerIXPFactory,
     build_app,
-    PeeringASNFactory,
+    create_asn,
+    create_ixp,
+    create_member,
 )
 
 pytestmark = pytest.mark.django_db
@@ -27,7 +25,7 @@ created_date = start_of_current_month - timedelta(days=7)
 
 
 def test_with_no_data_generates_no_stats():
-    app, es = build_app(MemoryEventStore())
+    app, _ = build_app(MemoryEventStore())
     do_generate_stats(MockLookup(), es_app=app)
 
     stats = StatsPerIXP.objects.all()
@@ -204,7 +202,7 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
         es,
         ixp,
         create_asn(faker, es),
-        {"start_date": datetime(year=2023, month=1, day=1)},
+        {"start_date": datetime(year=2023, month=1, day=1, tzinfo=timezone.utc)},
     )
     # Two members joined within the last 12 months
     create_member(
@@ -212,14 +210,14 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
         es,
         ixp,
         create_asn(faker, es),
-        {"start_date": datetime(year=2024, month=1, day=1)},
+        {"start_date": datetime(year=2024, month=1, day=1, tzinfo=timezone.utc)},
     )
     create_member(
         faker,
         es,
         ixp,
         create_asn(faker, es),
-        {"start_date": datetime(year=2023, month=12, day=1)},
+        {"start_date": datetime(year=2023, month=12, day=1, tzinfo=timezone.utc)},
     )
     # One member joined more than 12 months ago but has since left
     create_member(
@@ -228,8 +226,8 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
         ixp,
         create_asn(faker, es),
         {
-            "start_date": datetime(year=2022, month=11, day=1),
-            "end_date": datetime(year=2023, month=6, day=17),
+            "start_date": datetime(year=2022, month=11, day=1, tzinfo=timezone.utc),
+            "end_date": datetime(year=2023, month=6, day=17, tzinfo=timezone.utc),
         },
     )
     # One member left and rejoined within the 12 months (so should not be counted)
@@ -240,11 +238,11 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
         ixp,
         asn_left_and_rejoined,
         {
-            "start_date": datetime(year=2022, month=11, day=1),
-            "end_date": datetime(year=2023, month=6, day=17),
+            "start_date": datetime(year=2022, month=11, day=1, tzinfo=timezone.utc),
+            "end_date": datetime(year=2023, month=6, day=17, tzinfo=timezone.utc),
         },
     )
-    date_rejoined = datetime(year=2023, month=11, day=11)
+    date_rejoined = datetime(year=2023, month=11, day=11, tzinfo=timezone.utc)
     join_event = IXPMemberJoined(
         asn_left_and_rejoined.number,
         stringify_date(date_rejoined),
@@ -266,8 +264,9 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
 def test_adds_member_growth_stats(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
-    es.time_travel(stats_date)
-    ixp = create_ixp(faker, es, created_date=stats_date)
+    earlier_date = (stats_date - timedelta(days=1)).replace(day=1)
+    es.time_travel(earlier_date)
+    ixp = create_ixp(faker, es, created_date=earlier_date)
     # Has 5 current members
     # 4 joined in the past
     for _ in range(1, 5):
@@ -276,15 +275,16 @@ def test_adds_member_growth_stats(faker: Faker):
             es,
             ixp,
             create_asn(faker, es),
-            {"start_date": datetime(year=2023, month=1, day=1)},
+            {"start_date": datetime(year=2023, month=1, day=1, tzinfo=timezone.utc)},
         )
     # One joined in the last month
+    es.time_travel(stats_date)
     create_member(
         faker,
         es,
         ixp,
         create_asn(faker, es),
-        {"start_date": datetime(year=2025, month=2, day=2)},
+        {"start_date": datetime(year=2025, month=2, day=2, tzinfo=timezone.utc)},
     )
 
     do_generate_stats(MockLookup(), app, stats_date)
@@ -340,3 +340,65 @@ def test_updates_existing_stats(faker: Faker):
     ixp_stats = all_stats_for_ixp.first()
     assert ixp_stats.last_generated > existing.last_generated
     assert ixp_stats.members > existing.members
+
+
+def test_saves_rs_peering_counts(faker: Faker):
+    app, es = build_app(MemoryEventStore())
+    stats_date = datetime(year=2025, month=3, day=1, tzinfo=timezone.utc)
+    previous_month = (stats_date - timedelta(days=1)).replace(day=1)
+    es.time_travel(previous_month)
+    ixp = create_ixp(faker, es, created_date=previous_month)
+    rs_peering_asn = create_asn(faker, es)
+    rs_depeering_asn = create_asn(faker, es)
+    # Pre-existing member peers with the RS
+    create_member(
+        faker,
+        es,
+        ixp,
+        rs_depeering_asn,
+        {
+            "start_date": datetime(year=2023, month=1, day=1, tzinfo=timezone.utc),
+            "is_rs_peer": True,
+        },
+    )
+    # Four more pre-existing members peer with the RS
+    for _ in range(1, 5):
+        create_member(
+            faker,
+            es,
+            ixp,
+            create_asn(faker, es),
+            {
+                "start_date": datetime(year=2023, month=1, day=1, tzinfo=timezone.utc),
+                "is_rs_peer": True,
+            },
+        )
+    # One new route server peer in the last month
+    es.time_travel(stats_date)
+    create_member(
+        faker,
+        es,
+        ixp,
+        rs_peering_asn,
+        {
+            "start_date": datetime(year=2025, month=2, day=2, tzinfo=timezone.utc),
+            "is_rs_peer": True,
+        },
+    )
+    # One pre-existing RS peer depeers in the last month
+    rspeeringstatuschange_event = RsPeeringStatusChange(
+        rs_depeering_asn.number,
+        False,
+        stringify_date(datetime(year=2025, month=2, day=2, tzinfo=timezone.utc)),
+    )
+    ixp.rs_peering_status_change(rspeeringstatuschange_event)
+    es.store(ixp, rspeeringstatuschange_event)
+
+    do_generate_stats(MockLookup(), app, stats_date)
+
+    ixp_stats = StatsPerIXP.objects.filter(stats_date=stats_date.date()).first()
+
+    assert ixp_stats.monthly_rs_peered_members_count == 1
+    assert ixp_stats.monthly_rs_depeered_members_count == 1
+    assert ixp_stats.monthly_rs_peered_members == [rs_peering_asn.number]
+    assert ixp_stats.monthly_rs_depeered_members == [rs_depeering_asn.number]
