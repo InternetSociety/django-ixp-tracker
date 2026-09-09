@@ -66,7 +66,6 @@ def do_generate_stats(
         members = ixp.get_members()
         members_last_month = ixp_last_month.get_members() if ixp_last_month else {}
         member_asns = list(members.keys())
-        member_last_month_asns = list(members_last_month.keys())
         member_count = len(member_asns)
         total_capacity = sum([m.port_speed for m in members.values()])
         rs_peers = [m for m in members if members[m].is_rs_peer]
