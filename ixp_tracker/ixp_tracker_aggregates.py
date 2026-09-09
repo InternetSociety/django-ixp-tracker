@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from ixp_tracker.event_store import DomainEvent, ValueNotChanged, Aggregate
+from ixp_tracker.event_store import Aggregate, DomainEvent, ValueNotChanged
 from ixp_tracker.json import dateify_string
 
 
@@ -343,7 +343,7 @@ class IXP(Aggregate):
             return self.members
         member_list = {}
         if as_at is not None:
-            for member_asn in self.members.keys():
+            for member_asn in self.members:
                 member = self.members[member_asn]
                 if member.date_joined <= as_at and (
                     member.date_left is None or member.date_left >= as_at
@@ -355,7 +355,7 @@ class IXP(Aggregate):
                 ):
                     member_list[member_asn] = member
             return member_list
-        for member_asn in self.members.keys():
+        for member_asn in self.members:
             member = self.members[member_asn]
             if member.date_left is None:
                 member_list[member_asn] = member
