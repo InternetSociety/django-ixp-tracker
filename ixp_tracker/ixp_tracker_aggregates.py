@@ -275,7 +275,6 @@ class IXP(Aggregate):
     org_id: int
     physical_locations: int | None
     members: dict[int, IXPMemberDetails]
-    member_history: list[tuple[int, IXPMemberDetails]]
 
     def created(self, event: IXPCreated):
         self.name = event.name
@@ -294,7 +293,6 @@ class IXP(Aggregate):
         self.org_id = event.org_id
         self.physical_locations = event.physical_locations
         self.members = {}
-        self.member_history = []
 
     def updated(self, event: IXPUpdated):
         if not isinstance(event.name, ValueNotChanged):
@@ -337,24 +335,11 @@ class IXP(Aggregate):
         self.last_active = dateify_string(event.last_active)
 
     def get_members(
-        self, include_inactive: bool = False, as_at: datetime | None = None
+        self, include_inactive: bool = False
     ) -> dict[int, IXPMemberDetails]:
         if include_inactive:
             return self.members
         member_list = {}
-        if as_at is not None:
-            for member_asn in self.members:
-                member = self.members[member_asn]
-                if member.date_joined <= as_at and (
-                    member.date_left is None or member.date_left >= as_at
-                ):
-                    member_list[member_asn] = member
-            for member_asn, member in self.member_history:
-                if member.date_joined <= as_at and (
-                    member.date_left is None or member.date_left >= as_at
-                ):
-                    member_list[member_asn] = member
-            return member_list
         for member_asn in self.members:
             member = self.members[member_asn]
             if member.date_left is None:
@@ -369,8 +354,6 @@ class IXP(Aggregate):
             event.is_rs_peer,
             event.port_speed,
         )
-        if self.members.get(event.asn) is not None:
-            self.member_history.append((event.asn, self.members[event.asn]))
         self.members[event.asn] = details
 
     def port_speed_updated(self, event: PortSpeedUpdated):
@@ -397,11 +380,6 @@ class IXP(Aggregate):
             member_details = self.members[member_asn]
             members[int(member_asn)] = self.hydrate_member_details(member_details)  # type: ignore
         self.members = members
-        self.member_history = []
-        for member_asn, member_details in data["member_history"]:
-            self.member_history.append(
-                (member_asn, self.hydrate_member_details(member_details))
-            )
 
     def hydrate_member_details(
         self, member_details: dict[str, str]

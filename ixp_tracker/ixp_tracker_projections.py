@@ -114,7 +114,7 @@ class IXPsLastUpdatedProjection(Projection):
         # This also overwrites anything we've previously stored for this IXP so we only update based on the latest state
         # it also means that, given we're storing the event date, we can handle multiple "imports" (i.e. rebuilding the projection from scratch)
         snapshot = ixp.snapshot()
-        snapshot["members"] = ixp.get_members(as_at=event.event_date)
+        snapshot["members"] = ixp.get_members()
         self.ixps_to_update[ixp.id] = (ids.pk, snapshot, event.event_date)
 
     def ixps_updated_since(
