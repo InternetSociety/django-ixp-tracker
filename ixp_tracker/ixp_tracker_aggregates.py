@@ -381,6 +381,7 @@ class IXP(Aggregate):
         self.members[event.asn].last_active = dateify_string(event.last_active)
 
     def rs_peering_status_change(self, event: RsPeeringStatusChange):
+        self.members[event.asn].date_updated = dateify_string(event.date_updated)
         self.members[event.asn].is_rs_peer = event.is_rs_peer
 
     def member_left(self, event: IXPMemberLeft):
@@ -392,7 +393,7 @@ class IXP(Aggregate):
         self.last_updated = dateify_string(data["last_updated"])
         self.last_active = dateify_string(data["last_active"])
         members = {}
-        for member_asn in self.members.keys():
+        for member_asn in self.members:
             member_details = self.members[member_asn]
             members[int(member_asn)] = self.hydrate_member_details(member_details)  # type: ignore
         self.members = members

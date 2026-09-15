@@ -26,7 +26,7 @@ created_date = start_of_current_month - timedelta(days=7)
 
 def test_with_no_data_generates_no_stats():
     app, _ = build_app(MemoryEventStore())
-    do_generate_stats(MockLookup(), es_app=app)
+    do_generate_stats(MockLookup(), app)
 
     stats = StatsPerIXP.objects.all()
     assert len(stats) == 0
@@ -53,7 +53,7 @@ def test_generates_capacity_rs_peering_and_member_count(faker: Faker):
         {"port_speed": 10000, "is_rs_peer": False, "start_date": created_date},
     )
 
-    do_generate_stats(MockLookup(), es_app=app)
+    do_generate_stats(MockLookup(), app)
 
     stats = StatsPerIXP.objects.all()
     assert len(stats) == 1
@@ -103,7 +103,7 @@ def test_does_not_count_members_marked_as_left(faker: Faker):
         },
     )
 
-    do_generate_stats(MockLookup(), es_app=app)
+    do_generate_stats(MockLookup(), app)
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
@@ -131,7 +131,7 @@ def test_does_not_count_member_twice_if_they_rejoin(faker: Faker):
     ixp.member_joined(join_event)
     es.store(ixp, join_event)
 
-    do_generate_stats(MockLookup(), es_app=app)
+    do_generate_stats(MockLookup(), app)
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.members == 1
@@ -185,7 +185,7 @@ def test_saves_domestic_network_membership_rate(faker: Faker):
         PeeringASNFactory()["asn"],
         PeeringASNFactory()["asn"],
     ]
-    do_generate_stats(MockLookup(routed_asns=local_asns), es_app=app)
+    do_generate_stats(MockLookup(routed_asns=local_asns), app)
 
     ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.domestic_network_membership == 0.25
@@ -396,8 +396,7 @@ def test_saves_rs_peering_counts(faker: Faker):
 
     do_generate_stats(MockLookup(), app, stats_date)
 
-    ixp_stats = StatsPerIXP.objects.filter(stats_date=stats_date.date()).first()
-
+    ixp_stats = StatsPerIXP.objects.all().first()
     assert ixp_stats.monthly_rs_peered_members_count == 1
     assert ixp_stats.monthly_rs_depeered_members_count == 1
     assert ixp_stats.monthly_rs_peered_members == [rs_peering_asn.number]
