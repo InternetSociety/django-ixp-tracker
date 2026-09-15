@@ -56,13 +56,11 @@ def do_generate_stats(
     # Ensure we load the state of all IXPs as they were on the stats date
     ixps = es_app.get_all_ixps(stats_date)
     ixps_last_month = es_app.get_all_ixps(date_last_month)
+    ixps_12_months_ago = es_app.get_all_ixps(date_12_months_ago)
     for ixp in ixps:
         # We always save the stats per IXP after their created date so we can track stats across time (e.g. if an IXP becomes inactive then active again)
         isoc_id = es_app.find_isoc_id(ixp.id)
-        try:
-            ixp_last_month = next(i for i in ixps_last_month if i.id == ixp.id)
-        except StopIteration:
-            ixp_last_month = None
+        ixp_last_month = next((i for i in ixps_last_month if i.id == ixp.id), None)
         members = ixp.get_members()
         members_last_month = ixp_last_month.get_members() if ixp_last_month else {}
         member_asns = list(members.keys())
@@ -80,7 +78,13 @@ def do_generate_stats(
         domestic_network_coverage = calculate_local_asns_members_rate(
             member_asns + customer_asns, country_routed_asns
         )
-        members_12_months_ago = ixp.get_members(as_at=date_12_months_ago)
+        ixp_12_months_ago = next(
+            (i for i in ixps_12_months_ago if i.id == ixp.id), None
+        )
+        if ixp_12_months_ago:
+            members_12_months_ago = ixp_12_months_ago.get_members()
+        else:
+            members_12_months_ago = {}
         member_asns_12_months_ago = members_12_months_ago.keys()
         members_left_in_last_12_months = [
             asn for asn in member_asns_12_months_ago if asn not in member_asns

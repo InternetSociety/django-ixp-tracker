@@ -3,7 +3,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from faker import Faker
 
-from ixp_tracker.ixp_tracker_aggregates import IXPMemberJoined, RsPeeringStatusChange
+from ixp_tracker.ixp_tracker_aggregates import (
+    IXPMemberJoined,
+    RsPeeringStatusChange,
+    IXPMemberLeft,
+)
 from ixp_tracker.json import stringify_date
 from ixp_tracker.models import StatsPerIXP
 from ixp_tracker.stats import do_generate_stats
@@ -194,40 +198,28 @@ def test_saves_domestic_network_membership_rate(faker: Faker):
 def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
     app, es = build_app(MemoryEventStore())
     stats_date = datetime(year=2024, month=2, day=1, tzinfo=timezone.utc)
-    es.time_travel(stats_date)
-    ixp = create_ixp(faker, es, created_date=stats_date)
+    date_more_than_12_months_ago = datetime(
+        year=2023, month=1, day=1, tzinfo=timezone.utc
+    )
+    es.time_travel(date_more_than_12_months_ago)
+    ixp = create_ixp(faker, es, created_date=date_more_than_12_months_ago)
     # One member joined more than 12 months ago and is still a member (i.e. not counted in either)
     create_member(
         faker,
         es,
         ixp,
         create_asn(faker, es),
-        {"start_date": datetime(year=2023, month=1, day=1, tzinfo=timezone.utc)},
-    )
-    # Two members joined within the last 12 months
-    create_member(
-        faker,
-        es,
-        ixp,
-        create_asn(faker, es),
-        {"start_date": datetime(year=2024, month=1, day=1, tzinfo=timezone.utc)},
-    )
-    create_member(
-        faker,
-        es,
-        ixp,
-        create_asn(faker, es),
-        {"start_date": datetime(year=2023, month=12, day=1, tzinfo=timezone.utc)},
+        {"start_date": date_more_than_12_months_ago},
     )
     # One member joined more than 12 months ago but has since left
+    asn_left_within_12_month_period = create_asn(faker, es)
     create_member(
         faker,
         es,
         ixp,
-        create_asn(faker, es),
+        asn_left_within_12_month_period,
         {
-            "start_date": datetime(year=2022, month=11, day=1, tzinfo=timezone.utc),
-            "end_date": datetime(year=2023, month=6, day=17, tzinfo=timezone.utc),
+            "start_date": date_more_than_12_months_ago,
         },
     )
     # One member left and rejoined within the 12 months (so should not be counted)
@@ -239,9 +231,23 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
         asn_left_and_rejoined,
         {
             "start_date": datetime(year=2022, month=11, day=1, tzinfo=timezone.utc),
-            "end_date": datetime(year=2023, month=6, day=17, tzinfo=timezone.utc),
         },
     )
+
+    date_one_month_ago = datetime(year=2024, month=1, day=1, tzinfo=timezone.utc)
+    es.time_travel(date_one_month_ago)
+    # One member joined more than 12 months ago but has since left
+    asn_left_within_12_month_period_left = IXPMemberLeft(
+        asn_left_within_12_month_period.number, stringify_date(date_one_month_ago)
+    )
+    ixp.member_left(asn_left_within_12_month_period_left)
+    es.store(ixp, asn_left_within_12_month_period_left)
+    # One member left and rejoined within the 12 months (so should not be counted)
+    asn_left_and_rejoined_left = IXPMemberLeft(
+        asn_left_and_rejoined.number, stringify_date(date_one_month_ago)
+    )
+    ixp.member_left(asn_left_and_rejoined_left)
+    es.store(ixp, asn_left_and_rejoined_left)
     date_rejoined = datetime(year=2023, month=11, day=11, tzinfo=timezone.utc)
     join_event = IXPMemberJoined(
         asn_left_and_rejoined.number,
@@ -253,6 +259,21 @@ def test_counts_net_joins_and_net_leaves_since_12_months(faker: Faker):
     )
     ixp.member_joined(join_event)
     es.store(ixp, join_event)
+    # Two members joined within the last 12 months
+    create_member(
+        faker,
+        es,
+        ixp,
+        create_asn(faker, es),
+        {"start_date": date_one_month_ago},
+    )
+    create_member(
+        faker,
+        es,
+        ixp,
+        create_asn(faker, es),
+        {"start_date": datetime(year=2023, month=12, day=1, tzinfo=timezone.utc)},
+    )
 
     do_generate_stats(MockLookup(), app, stats_date)
 
