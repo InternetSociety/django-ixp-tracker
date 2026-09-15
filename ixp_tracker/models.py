@@ -15,6 +15,10 @@ class StatsPerIXP(models.Model):
     members_left_last_12_months = models.IntegerField()
     monthly_members_change = models.IntegerField()
     monthly_members_change_percent = models.FloatField()
+    monthly_rs_peered_members_count = models.IntegerField(null=True)
+    monthly_rs_depeered_members_count = models.IntegerField(null=True)
+    monthly_rs_peered_members = models.JSONField(null=True)
+    monthly_rs_depeered_members = models.JSONField(null=True)
     last_generated = models.DateTimeField()
 
     def __str__(self):

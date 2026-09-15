@@ -3,20 +3,20 @@ from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
-from ixp_tracker.event_store import Projection, Aggregate
+from ixp_tracker.event_store import Aggregate, Projection
 from ixp_tracker.ixp_tracker_aggregates import (
-    IXPCreated,
-    ASNCreated,
     ASN,
     IXP,
     IXP_TRACKER_EVENT_MAP,
-    IXPMemberActiveInPeeringDb,
+    ASNCreated,
     IXPActiveInPeeringDb,
+    IXPCreated,
+    IXPMemberActiveInPeeringDb,
 )
 from ixp_tracker.models import (
-    StoredEvent,
     ASNMap,
     IXPIdMap,
+    StoredEvent,
     UpdatedIXPs,
 )
 from ixp_tracker.updated_ixp_records import IXPMemberRecord, IXPRecord
@@ -89,7 +89,7 @@ class IXPsLastUpdatedProjection(Projection):
     def __init__(self, app: ASNLookup):
         self.events = []
         # We need to make sure we handle any IXP events that make changes so this feels like the most reliable way to do that
-        for event_type in IXP_TRACKER_EVENT_MAP.keys():
+        for event_type in IXP_TRACKER_EVENT_MAP:
             if event_type.startswith("ASN"):
                 continue
             # We don't need the "last_active" events though as they don't materially change the aggregates
@@ -114,7 +114,7 @@ class IXPsLastUpdatedProjection(Projection):
         # This also overwrites anything we've previously stored for this IXP so we only update based on the latest state
         # it also means that, given we're storing the event date, we can handle multiple "imports" (i.e. rebuilding the projection from scratch)
         snapshot = ixp.snapshot()
-        snapshot["members"] = ixp.get_members(as_at=event.event_date)
+        snapshot["members"] = ixp.get_members()
         self.ixps_to_update[ixp.id] = (ids.pk, snapshot, event.event_date)
 
     def ixps_updated_since(
@@ -126,7 +126,7 @@ class IXPsLastUpdatedProjection(Projection):
         return list(updated.all()[:count])
 
     def finalise(self):
-        for aggregate_id in self.ixps_to_update.keys():
+        for aggregate_id in self.ixps_to_update:
             isoc_id, snapshot, event_date = self.ixps_to_update[aggregate_id]
             member_records: list[IXPMemberRecord] = []
             members = snapshot["members"]

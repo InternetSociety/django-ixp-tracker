@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from json import JSONDecoder
-from typing import TypedDict, Optional, Any
-from uuid import uuid4, UUID
+from typing import Any, TypedDict
+from uuid import UUID, uuid4
 
 import factory
 from faker import Faker
@@ -10,43 +10,43 @@ from typing_extensions import NotRequired
 
 from ixp_tracker.data_lookup import AdditionalDataSources
 from ixp_tracker.event_store import (
-    DomainEvent,
-    ValueNotChanged,
     Aggregate,
-    Projection,
-    EventStore,
     DjangoEventStore,
+    DomainEvent,
+    EventStore,
     EventStorePersistence,
+    Projection,
     T,
+    ValueNotChanged,
 )
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
 )
 from ixp_tracker.ixp_tracker_aggregates import (
-    IXPCreated,
-    IXPBecameActive,
-    IXPMemberJoined,
-    IXPMemberLeft,
-    ASNCreated,
-    IXP_TRACKER_EVENT_MAP,
     ASN,
     IXP,
+    IXP_TRACKER_EVENT_MAP,
+    ASNCreated,
+    IXPBecameActive,
+    IXPCreated,
+    IXPMemberJoined,
+    IXPMemberLeft,
     NetworkType,
-    PeeringPolicy,
     NROStatus,
+    PeeringPolicy,
 )
 from ixp_tracker.ixp_tracker_projections import (
     ASNList,
     IXPIdMapProjection,
     IXPsLastUpdatedProjection,
 )
-from ixp_tracker.models import (
-    StoredEvent,
-    IXPIdMap,
-    StatsPerIXP,
-    StatsPerCountry,
-)
 from ixp_tracker.json import IXPJSONEncoder, stringify_date
+from ixp_tracker.models import (
+    IXPIdMap,
+    StatsPerCountry,
+    StatsPerIXP,
+    StoredEvent,
+)
 
 
 class MemberProperties(TypedDict):
@@ -200,6 +200,12 @@ class StatsPerIXPFactory(factory.django.DjangoModelFactory):
     monthly_members_change_percent = factory.Faker(
         "pyfloat", left_digits=1, right_digits=4, positive=True, max_value=1
     )
+    monthly_rs_peered_members_count = factory.Faker("random_number", digits=3)
+    monthly_rs_depeered_members_count = factory.Faker("random_number", digits=3)
+    monthly_rs_peered_members = factory.List([factory.Faker("random_number", digits=6)])
+    monthly_rs_depeered_members = factory.List(
+        [factory.Faker("random_number", digits=6)]
+    )
     last_generated = factory.Faker(
         "date_time_between", start_date="-4w", end_date="-1w", tzinfo=timezone.utc
     )
@@ -258,7 +264,7 @@ class CreatedTestAggregate(DomainEvent):
 @dataclass
 class TestAggregateUpdated(DomainEvent):
     __test__ = False
-    foo: Optional[str] | ValueNotChanged = ValueNotChanged()
+    foo: str | None | ValueNotChanged = ValueNotChanged()
     bar: str | ValueNotChanged = ValueNotChanged()
 
 
@@ -271,7 +277,7 @@ TEST_EVENT_MAP = {
 class TestAggregate(Aggregate):
     __test__ = False
     foo: str | None
-    bar: Optional[str] = None
+    bar: str | None = None
 
     def created(self, event: CreatedTestAggregate):
         self.foo = event.foo
