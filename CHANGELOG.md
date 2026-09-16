@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.2.0
+- add monthly route server peering stats to per IXP statistics
+
 ## 3.1.0
 - change last updated projection to decorate ASNs to improve performance of `IXPTracker.fetch_updated_ixp_records`. Note the projection needs rebuilding to make this work.
 
