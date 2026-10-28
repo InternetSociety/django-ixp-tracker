@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 from ixp_tracker.data_lookup import ASNGeoLookup
 from ixp_tracker.ixp_tracker import as_zz_country_check
 from ixp_tracker.ixp_tracker_aggregates import NROStatus
+from typing_extensions import deprecated
 
 
+@deprecated("Scheduled for removal in a future major version")
 def check_org_networks(
     ixs: list[dict], networks: list[dict], asn_lookup: ASNGeoLookup, as_at: datetime
 ) -> dict[int, bool | None]:

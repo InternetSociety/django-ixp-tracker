@@ -41,6 +41,7 @@ def import_data(
     additional_data: AdditionalDataSources,
     processing_date: datetime | None = None,
     local_archive_path: Path | None = None,
+    enable_org_network_status_check: bool = True,
 ):
     today = datetime.now(timezone.utc)
     local_archive_path = local_archive_path or Path(
@@ -63,8 +64,12 @@ def import_data(
     es_app = build_app(processing_date)
     ixp_data = all_pdb_data.get("ix", {"data": []}).get("data", [])
     asn_data = all_pdb_data.get("net", {"data": []}).get("data", [])
-    org_network_checks = check_org_networks(
-        ixp_data, asn_data, additional_data, processing_date
+    # There is some doubt whether this check is valid. See https://github.com/peeringdb/peeringdb/issues/2058#issuecomment-6069113534
+    # For now we add the option to disable the check. We will consider removing it in the next major version.
+    org_network_checks = (
+        check_org_networks(ixp_data, asn_data, additional_data, processing_date)
+        if enable_org_network_status_check
+        else {}
     )
     process_ixp_data(
         ixp_data, processing_date, additional_data, es_app, org_network_checks

@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.3.0
+- deprecate org network status check
+
 ## 3.2.0
 - add monthly route server peering stats to per IXP statistics
 
