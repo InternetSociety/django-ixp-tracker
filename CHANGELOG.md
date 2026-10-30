@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.4.0
+- deprecate RIPE ATLAS Anchor pulling in IXP ids from external data source, replaced with supplying relevant ASNs directly for now. Falls back to current behaviour if no ASNs are passed in.
+
 ## 3.3.0
 - deprecate org network status check
 

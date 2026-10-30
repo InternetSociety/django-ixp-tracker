@@ -17,6 +17,7 @@ from ixp_tracker.conf import (
 from ixp_tracker.data_lookup import AdditionalDataSources, ASNGeoLookup
 from ixp_tracker.event_store import DjangoEventStore, EventStore, DataAlreadyImported
 from ixp_tracker.gather_data import gather_data, save_data
+from ixp_tracker.get_atlas_anchor_hosts import get_atlas_anchor_hosts
 from ixp_tracker.ixp_tracker import (
     IXPTracker,
     MemberImportData,
@@ -42,6 +43,8 @@ def import_data(
     processing_date: datetime | None = None,
     local_archive_path: Path | None = None,
     enable_org_network_status_check: bool = True,
+    anchor_host_asns: list[int]
+    | None = None,  # We should move this to AdditionalDataSources in the next major version
 ):
     today = datetime.now(timezone.utc)
     local_archive_path = local_archive_path or Path(
@@ -71,8 +74,16 @@ def import_data(
         if enable_org_network_status_check
         else {}
     )
+    anchor_hosts = []
+    if anchor_host_asns is not None:
+        anchor_hosts = get_atlas_anchor_hosts(ixp_data, asn_data, anchor_host_asns)
     process_ixp_data(
-        ixp_data, processing_date, additional_data, es_app, org_network_checks
+        ixp_data,
+        processing_date,
+        additional_data,
+        es_app,
+        org_network_checks,
+        anchor_hosts,
     )
     # This is an optimisation to improve import performance. Peering DB list of networks contains about 2x the number of networks in the member list
     # So, fo now, we choose only to import the ASN data referenced in the member data
@@ -169,11 +180,14 @@ def process_ixp_data(
     data_lookup: AdditionalDataSources,
     event_sourcing_app: IXPTracker,
     org_network_checks: dict[int, bool | None],
+    anchor_hosts: list[int],
 ):
     manrs_participants = data_lookup.get_manrs_participants(processing_date)
-    # We currently rely on an external lookup that cross-references RIPE ATLAS data against PeeringDB
-    # Perhaps we could do some or all of that processing here in the future.
-    anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
+    if len(anchor_hosts) == 0:
+        # This is provided as a fallback and for backwards compatibility
+        # We will look to remove this in a future major version
+        # Though it might be worth keeping it for historical processing
+        anchor_hosts = data_lookup.get_atlas_anchor_hosts(processing_date)
     ixps_added = 0
     ixps_updated = 0
     for ixp_data in all_ixp_data:

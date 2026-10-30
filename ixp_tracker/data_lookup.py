@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 from typing import Protocol
 
+from typing_extensions import deprecated
+
 logger = logging.getLogger("ixp_tracker")
 
 
@@ -30,6 +32,7 @@ class MANRSParticipantsLookup(Protocol):
         pass
 
 
+@deprecated("Pass the ATLAS anchor ASNs in directly instead")
 class AtlasAnchorHostLookup(Protocol):
     def get_atlas_anchor_hosts(self, as_at: datetime) -> list[int]:
         pass
